@@ -1,0 +1,13 @@
+.idea
+*.pyc
+__pycache__
+*~
+*.csv
+runs/
+# Setuptools distribution folder.
+/dist/
+runs
+# Python egg metadata, regenerated from source files by setuptools.
+/*.egg-info
+
+.ipynb_checkpoints
