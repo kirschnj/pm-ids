@@ -5,7 +5,7 @@ from numpy.testing import assert_almost_equal
 from pm.estimator import RegularizedLeastSquares, RegretEstimator
 from pm.games.bandit import Bandit
 from pm.games.pm import GenericPM
-from pm.strategies.ids import full_info, directed_info_2
+from pm.strategies.ids import full, directed2
 from scipy.linalg import cho_solve
 
 class MyTestCase(unittest.TestCase):
@@ -20,18 +20,19 @@ class MyTestCase(unittest.TestCase):
         V = X.T.dot(X) + np.eye(2)
 
         game = Bandit(X=X)
+        I = game.get_indices()
         estimator = RegretEstimator(game, lls, delta=0.5, truncate=False)
 
-        assert_almost_equal(full_info(X[0:1], game, estimator), np.log(1+ lls.var(X[0:1])))
-        assert_almost_equal(full_info(X[0:4], game, estimator), np.log(1+ lls.var(X[0:4])))
+        assert_almost_equal(full(I[0:1], game, estimator), np.log(1 + lls.var(X[0:1])))
+        assert_almost_equal(full(I[0:4], game, estimator), np.log(1 + lls.var(X[0:4])))
 
         A = np.arange(30).reshape(5,3,2)
         game = GenericPM(X, A)
 
         i0 = np.log(np.linalg.det(np.eye(3) + A[0].dot(np.linalg.solve(V, A[0].T))))
         i1 = np.log(np.linalg.det(np.eye(3) + A[1].dot(np.linalg.solve(V, A[1].T))))
-        assert_almost_equal(full_info([0], game, estimator), i0)
-        assert_almost_equal(full_info([0,1], game, estimator), [i0, i1])
+        assert_almost_equal(full([0], game, estimator), i0)
+        assert_almost_equal(full([0, 1], game, estimator), [i0, i1])
 
 
     def test_directed_infogain(self):
@@ -64,8 +65,8 @@ class MyTestCase(unittest.TestCase):
         i1 = np.log(lls.var(max_w)) - np.log(max_w.dot(np.linalg.solve(V + A[1].T.dot(A[1]), max_w.T)))
 
 
-        assert_almost_equal(directed_info_2([0], game, estimator), [i0])
-        assert_almost_equal(directed_info_2([0,1], game, estimator), [i0, i1])
+        assert_almost_equal(directed2([0], game, estimator), [i0])
+        assert_almost_equal(directed2([0, 1], game, estimator), [i0, i1])
 
 
 

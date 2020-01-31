@@ -23,9 +23,10 @@ class MyTestCase(unittest.TestCase):
         assert_almost_equal(ucb, np.array([2.01607811, 2.54460417, 3.56871037, 5.03284902, 6.70046731]))
 
         game = Bandit(X=X)
+        I = game.get_indices()
         regret_estimate = RegretEstimator(game, lls, delta=0.5, truncate=False)
 
-        assert_almost_equal(regret_estimate.regret_upper(X), np.array([0.        , 1.84704133, 3.69408266, 5.541124  , 7.38816533]))
+        assert_almost_equal(regret_estimate.regret_upper(I), np.array([0.        , 1.84704133, 3.69408266, 5.541124  , 7.38816533]))
 
 
 if __name__ == '__main__':

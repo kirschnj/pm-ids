@@ -9,7 +9,6 @@ class GenericPM(Game):
     """
 
     def __init__(self, X, A, id=""):
-
         if np.ndim(X) != 2:
             raise ValueError("X needs to be 2-dimensional!")
 

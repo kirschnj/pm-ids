@@ -79,13 +79,12 @@ class RegretEstimator:
         return self._lls
 
     def add_data(self, indices, y):
-        # stack the observation operators for the given indices
+        # stack the observations and observation operators
+        ax = self._game.get_observation_maps(indices)
+        ax = np.vstack(ax)
+        y = np.hstack(y)
 
-        # TODO: The atleast_2d is not very nice, there should be a specified format
-        ax = np.atleast_2d(self._game.get_observation_maps(indices))
-        if ax.shape[0] > 1:
-            ax = np.hstack(ax)
-        y = np.atleast_1d(y)
+        # update lls
         self._lls.add_data(ax, y)
 
     def ucb(self, indices):
@@ -96,6 +95,14 @@ class RegretEstimator:
 
         return self._lls.ucb(X, delta=self._delta)
 
+    def lcb(self, indices):
+        X = self._game.get_actions(indices)
+        return self._lls.lcb(X, delta=self._delta)
+
+    def var(self, indices):
+        X = self._game.get_actions(indices)
+        return self._lls.var(X)
+
     def regret_upper(self, indices):
         """
         Regret upper bound
@@ -103,8 +110,8 @@ class RegretEstimator:
         X = self._game.get_actions(indices)
         D = difference_matrix(X)
 
-        # compute ucb score for all differences and max out rows
-        regret = np.max(self._lls.ucb(D, delta=self._delta), axis=-1)
+        # compute ucb score for all differences and max out columns
+        regret = np.max(self._lls.ucb(D, delta=self._delta), axis=0)
 
         if self._truncate:
             return np.minimum(regret, 1)
@@ -122,7 +129,7 @@ class RegretEstimator:
         D = difference_matrix(X)
 
         # compute ucb score for all differences and max out rows
-        regret = np.max(self._lls.lcb(D, delta=self._delta), axis=-1)
+        regret = np.max(self._lls.lcb(D, delta=self._delta), axis=0)
 
         return regret
 

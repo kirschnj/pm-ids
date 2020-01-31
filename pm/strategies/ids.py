@@ -5,7 +5,7 @@ from scipy.linalg import cho_solve, cho_factor
 from pm.utils import difference_matrix
 
 
-def full_info(indices, game, estimator):
+def full(indices, game, estimator):
     """
     log det(I + A^T V_t^{-1} A)
     """
@@ -26,10 +26,48 @@ def full_info(indices, game, estimator):
         L = cho_factor(Ci)[0]
         infogain[i] = 2*np.sum(np.log(np.diag(L)))
 
+
+    lower_bound = estimator.regret_lower_2(indices)
     return infogain
 
+def directeducb(indices, game, estimator):
+    """
+    First the most uncertain direction w in the set of plausible maximizers is computed,
+    then I = log var(w) - log var(w|A)
 
-def directed_info_2(indices, game, estimator):
+    """
+    m = game.get_m()
+    d = game.get_d()
+    I = game.get_indices()
+    A = game.get_observation_maps(indices)
+
+    # tentative update to V
+    VA = np.matmul(np.swapaxes(A, -2, -1), A) + estimator.lls.get_V()
+
+    # compute plausible maximizer set
+    ucb = estimator.ucb(I)
+    w = game.get_actions(I[np.argmax(ucb)])
+
+    # print(estimator.ucb([i]) - np.max(estimator.lcb(indices)))
+    # print(estimator.ucb(indices) - np.max(estimator.lcb(indices)), 'ucb-max lcb')
+    # print(estimator.regret_lower_2([i, j]))
+    # print(w, i,j)
+    # print(i,j)
+
+    # if w is 0-vector, return 0 info gain
+
+    log_var_w = np.log(estimator.lls.var(w))
+    log_var_wA = np.zeros(len(indices))
+
+    # compute log(var(w|A_i)) for each A_i
+    for i, VAi in enumerate(VA):
+        L = cho_factor(VAi)
+        Vinv_w = cho_solve(L, w)
+        log_var_wA[i] = np.log(w.dot(Vinv_w))
+
+    return log_var_w - log_var_wA
+
+def directed2(indices, game, estimator):
     """
     First the most uncertain direction w in the set of plausible maximizers is computed,
     then I = log var(w) - log var(w|A)
@@ -45,14 +83,85 @@ def directed_info_2(indices, game, estimator):
 
     # compute plausible maximizer set
     lower_bound = estimator.regret_lower_2(I)
+    # print(lower_bound)
     P = game.get_actions(I[lower_bound <= 10e-10])
     # all pairs of plausible maximizers
     PP = difference_matrix(P)
     i, j = np.unravel_index(np.argmax(estimator.lls.var(PP)), (len(P), len(P)))
+
     w = P[i] - P[j]
+
+    # print(estimator.ucb([i]) - np.max(estimator.lcb(indices)))
+    # print(estimator.ucb(indices) - np.max(estimator.lcb(indices)), 'ucb-max lcb')
+    # print(estimator.regret_lower_2([i, j]))
+    # print(w, i,j)
+    # print(i,j)
 
     # if w is 0-vector, return 0 info gain
     if np.sum(w*w) <= 10e-30:
+        return np.zeros(len(indices))
+
+    log_var_w = np.log(estimator.lls.var(w))
+    log_var_wA = np.zeros(len(indices))
+
+    # compute log(var(w|A_i)) for each A_i
+    for i, VAi in enumerate(VA):
+        L = cho_factor(VAi)
+        Vinv_w = cho_solve(L, w)
+        log_var_wA[i] = np.log(w.dot(Vinv_w))
+
+    return log_var_w - log_var_wA
+
+def plausible_maximizers_2(game, estimator):
+    I = game.get_indices()
+    lower_bound = estimator.regret_lower_2(I)
+    return I[lower_bound <= 10e-10]
+
+
+def directed3(indices, game, estimator):
+    """
+    First the most uncertain direction w in the set of plausible maximizers is computed,
+    then I = log var(w) - log var(w|A)
+
+    """
+    m = game.get_m()
+    d = game.get_d()
+    I = game.get_indices()
+    A = game.get_observation_maps(indices)
+
+    # tentative update to V
+    VA = np.matmul(np.swapaxes(A, -2, -1), A) + estimator.lls.get_V()
+
+    # compute plausible maximizer set
+
+
+    P = game.get_actions(I[np.max(estimator.lcb(I)) <= estimator.ucb(I)])
+
+    max_var = -1
+    max_w = None
+    for x in P:
+        for y in P:
+            tvar = estimator.lls.var(x-y)
+            if tvar > max_var:
+                max_var = tvar
+                max_w = x-y
+
+    w = max_w
+
+    # all pairs of plausible maximizers
+    # PP = difference_matrix(P)
+    # i, j = np.unravel_index(np.argmax(estimator.lls.var(PP)), (len(P), len(P)))
+    #
+    # w = P[i] - P[j]
+    #
+    # # print(estimator.ucb([i]) - np.max(estimator.lcb(indices)))
+    # # print(estimator.ucb(indices) - np.max(estimator.lcb(indices)), 'ucb-max lcb')
+    # # print(estimator.regret_lower_2([i, j]))
+    # # print(w, i,j)
+    # print(i,j)
+
+    # if w is 0-vector, return 0 info gain
+    if np.sum(w*w) <= 10e-20:
         return np.zeros(len(indices))
 
     log_var_w = np.log(estimator.lls.var(w))
@@ -76,7 +185,7 @@ class IDS(Strategy):
 
     def get_next_action(self):
         if self._deterministic:
-            return self._deterministic_ids()
+            return self._dids()
         else:
             return self._ids()
 
@@ -99,7 +208,9 @@ class IDS(Strategy):
         https://www.wolframalpha.com/input/?i=d%2Fdx+(Ax+%2B+(1-x)*B)^2%2F(Cx+%2B+(1-x)D)+
         """
         indices = self._game.get_indices()
-        regret = self._estimator.regret(indices)
+        # indices = plausible_maximizers_2(self._game, self._estimator)
+        regret = self._estimator.regret_upper(indices)
+
         infogain = self._infogain(indices, self._game, self._estimator)
 
         best_p = None
@@ -122,7 +233,7 @@ class IDS(Strategy):
                     ratio, p = self._mixed_ratio(A, B, C, D, 0., ratio, p)
 
                 # mixed solution
-                if np.abs(C - D) > 10e-20 and np.abs(C - D) > 10e-20:
+                if np.abs(C - D) > 10e-20 and np.abs(B - A) > 10e-20:
                     x = D/(C-D)
                     ratio, p = self._mixed_ratio(A, B, C, D, x, ratio, p)
 
@@ -145,15 +256,29 @@ class IDS(Strategy):
         else:
             return indices[best_j]
 
-    def _deterministic_ids(self):
+    def _dids(self):
         """
         Compute the deterministic IDS solution
         """
         indices = self._game.get_indices()
-        ratio = np.square(self._estimator.regret(indices))/self._infogain(indices, self._game, self._estimator)
+        # regret = self._estimator.regret_upper(indices)
+        #
+        infogain = self._infogain(indices, self._game, self._estimator)
+
+        # print(full(indices, self._game, self._estimator) - directed2(indices, self._game, self._estimator))
+
+        regret = np.max(self._estimator.ucb(indices)) - self._estimator.lcb(indices)
+        ratio = regret**2/infogain
         return indices[np.argmin(ratio)]
 
     def id(self):
+        """
+        returns identifier.
+        ID is {ids,dids}-infogain
+        """
+        _id = "ids"
         if self._deterministic:
-            return "dids"
-        return "ids"
+            _id = "dids"
+        _id += f"-{self._infogain.__name__}"
+
+        return _id
