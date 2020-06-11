@@ -13,3 +13,12 @@ In this case:
 * `--n=10000` is the horizon
 
 See `pm2 --help` and pm/main.py for more options and details
+
+
+## Code
+The main structure is:
+
+* `game.py` defines the action & observation features. Examples in `pm/games/`
+* `instance.py` defines the game parameter, so game+instance gives you one specific bandit model
+* `strategy.py` defines the algorithm. Examples in `pm/strategies/`
+* `estimator.py` is for parameter estimation, so least squares here, and an estimator to compute the gaps
