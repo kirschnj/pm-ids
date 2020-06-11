@@ -4,11 +4,14 @@ import os
 import numpy as np
 
 def regret(data):
-    regret = data[:,1,:]
+    """
+    aggregator for cumulative regret (2nd column of each csv)
+    """
+    regret = data[:, 1, :]
     regret_avg = np.mean(regret, axis=1)
     regret_std = np.std(regret, axis=1)
-    # regret_err = regret_std / np.sqrt(len(data))
     return np.vstack([regret_avg, regret_std]).T
+
 
 AGGREGATORS = [regret]
 
@@ -48,27 +51,19 @@ def aggregate(path, aggregator):
 
 
 def main():
-
-    # store available games and strategies as a dict
+    # store available aggregator
     aggregators = dict([(f.__name__, f) for f in AGGREGATORS])
 
-    # setup argument parse
+    # setup argument parser
     parser = argparse.ArgumentParser(description='run a partial monitoring game.')
     parser.add_argument('path')
     parser.add_argument('aggregator', choices=aggregators.keys())
-    # parser.add_argument('--n', type=int, required=True)
-    # parser.add_argument('--outdir', type=str)
-    # parser.add_argument('--seed', type=int)
-    # parser.add_argument('--infogain', choices=[f.__name__ for f in INFOGAIN])
-    # parser.add_argument('--dids', action='store_true')
 
     # parse arguments
     args = vars(parser.parse_args())
     aggregator = aggregators[args['aggregator']]
 
     # run aggregation
-
-    # list all directories that have a params.json
     for path in glob.iglob(os.path.join(args['path'], '**/'), recursive=True):
         aggregate(path, aggregator)
 

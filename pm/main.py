@@ -16,6 +16,9 @@ from pm.utils import query_yes_no, timestamp, fixed_seed
 
 
 def noise_normal(size):
+    """
+    helper function that generates Gaussian observation noise
+    """
     return np.random.normal(0, 1, size=size)
 
 
@@ -34,6 +37,9 @@ def phi(x, X0):
 
 
 def simple_bandit(**params):
+    """
+    game factory for simple bandit game
+    """
     with fixed_seed(params.get('seed', None)):
         X = np.random.normal(size=12).reshape(6, 2)
         X = X / np.linalg.norm(X, axis=1)[:, None]
@@ -45,6 +51,9 @@ def simple_bandit(**params):
 
 
 def laser(**params):
+    """
+    game factory for laser experiment
+    """
     indirect = params['laser_indirect']
 
     grid = np.arange(-1, 1.1, 0.5)  # 1.1 to include 1
@@ -104,11 +113,14 @@ def laser(**params):
 
     return game, instance
 
-
+# list of available games
 GAMES = [simple_bandit, laser]
 
 
 def ucb(game_, **params):
+    """
+    strategy factory for UCB
+    """
     lls = RegularizedLeastSquares(d=game_.get_d())
     estimator = RegretEstimator(game=game_, lls=lls, delta=0.05, truncate=False)
     strategy = UCB(game_, estimator=estimator)
@@ -116,8 +128,11 @@ def ucb(game_, **params):
 
 
 def ids(game_, **params):
+    """
+    strategy factory for IDS
+    params: --infogain {full,directed2,...} --dids
+    """
     infogain_dict = dict([(f.__name__, f) for f in INFOGAIN])
-
     infogain = infogain_dict[params.get('infogain', 'full')]
     dids = params.get('dids')
 
@@ -127,7 +142,9 @@ def ids(game_, **params):
     return strategy
 
 
+# list of available strategies
 STRATEGIES = [ucb, ids]
+# list of available info gains for IDS
 INFOGAIN = [full, directed2, directed3, directeducb]
 
 
@@ -227,25 +244,30 @@ def main():
 
     # parse arguments
     args = vars(parser.parse_args())
+
     # create game and strategy factories
     game_factory = games[args['game']]
     strategy_factory = strategies[args['strategy']]
 
+    # repetition number
     rep = args['rep']
     del args['rep']
 
+    # aggregation flag
     aggr = args['aggr']
     del args['aggr']
 
-    # run game
+    # run game, possibly multiple times
     for i in range(rep):
         if rep > 1:
             print(f"Running iteration {i}.")
         path = run(game_factory, strategy_factory, **args)
 
+    # aggregate if requested
     if aggr:
         aggregator = aggregate.AGGREGATORS[[f.__name__ for f in aggregate.AGGREGATORS] == aggr]
         aggregate.aggregate(path, aggregator)
+
 
 if __name__ == "__main__":
     main()

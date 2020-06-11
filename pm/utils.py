@@ -4,9 +4,11 @@ import numpy as np
 import contextlib
 
 def timestamp():
-    # Converting datetime object to string
-    dateTimeObj = datetime.now()
-    return dateTimeObj.strftime("%Y%m%d-%H%M%S.%f")
+    """
+    compute timestamp used for filenames
+    """
+    now = datetime.now()
+    return now.strftime("%Y%m%d-%H%M%S.%f")
 
 
 def query_yes_no(question, default="yes"):

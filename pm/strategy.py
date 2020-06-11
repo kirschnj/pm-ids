@@ -1,6 +1,9 @@
 
 
 class Strategy:
+    """
+    Base class for a strategy
+    """
 
     def __init__(self, game, estimator):
         self._game = game
