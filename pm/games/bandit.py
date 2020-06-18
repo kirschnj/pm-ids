@@ -22,5 +22,13 @@ class Bandit(Game):
     def get_observation_maps(self, indices):
         return self.get_actions(indices).reshape(len(indices), 1, self._d)
 
+    def get_cell_constraints(self, index):
+        C = np.zeros((len(self._I),self._d))
+        for i in self._I:
+            if i != index:
+                C[i,:] = self._X[i,:] - self._X[index,:]
+
+        return C
+
     def id(self):
         return self._id

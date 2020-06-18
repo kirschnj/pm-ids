@@ -5,6 +5,9 @@ from scipy.linalg import cho_solve, cho_factor
 from pm.utils import difference_matrix
 
 
+
+
+
 def full(indices, game, estimator):
     """
     log det(I + A^T V_t^{-1} A)

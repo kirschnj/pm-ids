@@ -68,6 +68,23 @@ class MyTestCase(unittest.TestCase):
         assert_almost_equal(directed2([0], game, estimator), [i0])
         assert_almost_equal(directed2([0, 1], game, estimator), [i0, i1])
 
+    def test_info_game(self):
+        X = np.arange(10).reshape(5,2)
+        Y = np.arange(5)
+
+        lls = RegularizedLeastSquares(2)
+        lls.add_data(X, Y)
+
+        V = X.T.dot(X) + np.eye(2)
+
+        game = Bandit(X=X)
+        I = game.get_indices()
+        estimator = RegretEstimator(game, lls, delta=0.5, truncate=False)
+
+        # assert_almost_equal(full(I[0:1], game, estimator), np.log(1 + lls.var(X[0:1])))
+        # assert_almost_equal(full(I[0:4], game, estimator), np.log(1 + lls.var(X[0:4])))
+        #
+
 
 
 
