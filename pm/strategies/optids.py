@@ -57,7 +57,7 @@ def info_game(indices, game, estimator, q, nu, beta):
     J = np.zeros(len(indices)) #to be implemented
     # compute plausible maximizer set
     ucb = estimator.ucb(indices)
-    winner = indices[np.argmax(ucb)]
+    winner = np.argmax(ucb)
     w = game.get_actions(winner)
     epsilon = ucb[winner] - game._theta
 
@@ -98,19 +98,24 @@ class OPTIDS(Strategy):
         Compute the q-learner, which is a distribution over the constraints
 
         outputs:
-        q : KxK matrix containing the constraint mixing for each action
+        q : K vector containing the constraint mixing for each action (0 for the ucb one)
         """
         eta = self.eta#?
         theta_hat = self.estimator._theta
         V = self.estimator._V
-        q = np.zeros(len(indices))
+        k = len(indices)
+        q = np.zeros(k,k)
 
         nu = compute_nu(self.estimator, self.game)
+        ucb = estimator.ucb(indices)
+        winner = np.argmax(ucb)
+        w = game.get_actions(winner)
 
-        for i, nu_i in nu:
-            D = nu_i - theta_hat
-            V_norm = np.matmul(D, np.matmul(V,D))
-            q[i] = np.exp(-eta * (V_norm**2))
+        for i in indices:
+            if i != winner
+                D = nu[i,:] - theta_hat
+                V_norm = np.matmul(D, np.matmul(V,D))
+                q[i] = np.exp(-eta * (V_norm**2))
 
         # update self.eta
         return q
