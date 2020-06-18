@@ -39,7 +39,8 @@ def compute_nu(estimator, game):
 
 # TODO: create a new infogain that computes I_t + J_t as defined in Eq 103-105
 
-def info_game(indices, game, estimator, q, nu, beta):
+def info_game(indices, game, estimator, q, nu):
+    delta = 0.05 # this should be 1/t but I don't know yet how to do this
     I = np.zeros(len(indices)) #to be vectorized
     k = len(indices)
 
@@ -74,7 +75,7 @@ def info_game(indices, game, estimator, q, nu, beta):
             Xi = game._X[i,:]
             # obtain V_t^{-1}X_i
             Vinv_Xi = cho_solve(estimator.lls.get_cholesky_factor(), Xi.T)
-            J[i] = epsilon * beta * (np.matmul(Xi,V_inv_Xi))
+            J[i] = epsilon * estimator.beta(delta) * (np.matmul(Xi,V_inv_Xi))
 
     infogain = I + J
 
@@ -87,7 +88,6 @@ class OPTIDS(Strategy):
         super().__init__(game, estimator)
         self._infogain = infogain
         self.eta = 1  #not sure it is defined
-        self.beta = 1 #I don't know how to access time
 
 
     # def add_observations(self, indices, y):
@@ -101,18 +101,19 @@ class OPTIDS(Strategy):
         q : K vector containing the constraint mixing for each action (0 for the ucb one)
         """
         eta = self.eta#?
-        theta_hat = self.estimator._theta
-        V = self.estimator._V
+        delta = 0.01
+        theta_hat = self._estimator._lls._theta
+        V = self._estimator._lls._V
         k = len(indices)
-        q = np.zeros(k,k)
+        q = np.zeros(k)
 
-        nu = compute_nu(self.estimator, self.game)
-        ucb = estimator.ucb(indices)
+        nu = compute_nu(self._estimator._lls, self._game)
+        ucb = self._estimator.ucb(indices)
         winner = np.argmax(ucb)
-        w = game.get_actions(winner)
+        w = self._game.get_actions(winner)
 
         for i in indices:
-            if i != winner
+            if i != winner:
                 D = nu[i,:] - theta_hat
                 V_norm = np.matmul(D, np.matmul(V,D))
                 q[i] = np.exp(-eta * (V_norm**2))
@@ -131,7 +132,7 @@ class OPTIDS(Strategy):
         q = self.oco(indices)
 
 
-        infogain = self._infogain(indices, self._game, self._estimator,q, nu, beta)
+        infogain = self._infogain(indices, self._game, self._estimator,q, nu)
 
         # Next is similar to other ids, I need to figure out how to not duplicate code.
 
