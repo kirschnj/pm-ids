@@ -116,9 +116,10 @@ class OPTIDS(Strategy):
             if i != winner:
                 D = nu[i,:] - theta_hat
                 V_norm = np.matmul(D, np.matmul(V,D))
-                q[i] = np.exp(-eta * (V_norm**2))
+                q[i] = np.exp(-eta * (V_norm))
 
-        # update self.eta
+        # normalize
+        q /= np.linalg.norm(q)
         return q
 
     def _optids(self):
