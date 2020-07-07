@@ -22,6 +22,7 @@ class Bandit(Game):
     def get_observation_maps(self, indices):
         return self.get_actions(indices).reshape(len(indices), 1, self._d)
 
+    # this looks a lot like pm.utils.difference_matrix
     def get_cell_constraints(self, index):
         C = np.zeros((len(self._I),self._d))
         for i in self._I:

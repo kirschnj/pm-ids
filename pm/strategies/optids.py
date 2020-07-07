@@ -1,7 +1,8 @@
 from pm.strategy import Strategy
 import numpy as np
 from scipy.linalg import cho_solve, cho_factor
-import cvxpy as cp
+from pm.utils import compute_nu
+
 
 
 #TODO: implement the OCO learner
@@ -10,29 +11,29 @@ import cvxpy as cp
 
 
 
-def compute_nu(estimator, game):
-    """
-    Compute the alternative parameter for each cell but that of the empirical best arm.
-    """
-    indices = game._I
-    d = game._d
-    X = game.get_actions(indices)
-    theta = estimator._theta
-    V = estimator._V
-    nu = np.zeros((len(indices),d))
-    # for each action, solve the quadratic program to find the alternative
-    for i in indices:
-        Xi = X[i,:]
-        Ci = game.get_cell_constraints(i)
-        x = cp.Variable(game._d)
-        prob = cp.Problem(cp.Minimize(cp.quad_form(x, V)), [Ci @ x <= (-Ci @ theta)])
-        prob.solve()
-
-        nu[i:] = x.value #+ theta # we solved for x=nu-hat_theta
-
-    #normalize as per our unit ball hypothesis
-    nu /= np.linalg.norm(nu, axis=1)[:, None]
-    return nu
+# def compute_nu(estimator, game):
+#     """
+#     Compute the alternative parameter for each cell but that of the empirical best arm.
+#     """
+#     indices = game._I
+#     d = game._d
+#     X = game.get_actions(indices)
+#     theta = estimator._theta
+#     V = estimator._V
+#     nu = np.zeros((len(indices),d))
+#     # for each action, solve the quadratic program to find the alternative
+#     for i in indices:
+#         Xi = X[i,:]
+#         Ci = game.get_cell_constraints(i)
+#         x = cp.Variable(game._d)
+#         prob = cp.Problem(cp.Minimize(cp.quad_form(x, V)), [Ci @ x <= (-Ci @ theta)])
+#         prob.solve()
+#
+#         nu[i:] = x.value #+ theta # we solved for x=nu-hat_theta
+#
+#     #normalize as per our unit ball hypothesis
+#     nu /= np.linalg.norm(nu, axis=1)[:, None]
+#     return nu
 
 #TODO : write the test
 

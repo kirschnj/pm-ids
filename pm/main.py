@@ -10,9 +10,9 @@ from pm.estimator import RegularizedLeastSquares, RegretEstimator
 from pm.game import GameInstance
 from pm.games.bandit import Bandit
 from pm.games.pm import GenericPM
-from pm.strategies.ids import IDS, full, directed2, directeducb, directed3
+from pm.strategies.ids import IDS, full, directed2, directeducb, directed3, info_game
 from pm.strategies.ucb import UCB
-from pm.utils import query_yes_no, timestamp, fixed_seed
+from pm.utils import query_yes_no, timestamp, fixed_seed, compute_nu
 
 
 def noise_normal(size):
@@ -145,7 +145,7 @@ def ids(game_, **params):
 # list of available strategies
 STRATEGIES = [ucb, ids]
 # list of available info gains for IDS
-INFOGAIN = [full, directed2, directed3, directeducb]
+INFOGAIN = [full, directed2, directed3, directeducb, info_game]
 
 
 def run(game_factory, strategy_factory, **params):
@@ -263,7 +263,7 @@ def main():
             print(f"Running iteration {i}.")
         path = run(game_factory, strategy_factory, **args)
 
-    # aggregate if requested
+    # aggregate if requestedpm2 laser ids --n=10000 --outdir=pm-runs/ --infogain=full
     if aggr:
         aggregator = aggregate.AGGREGATORS[[f.__name__ for f in aggregate.AGGREGATORS] == aggr]
         aggregate.aggregate(path, aggregator)
