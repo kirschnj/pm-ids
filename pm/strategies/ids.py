@@ -254,7 +254,7 @@ class IDS(Strategy):
         outputs:
         q : K vector containing the constraint mixing for each action (0 for the ucb one)
         """
-        eta = 1. #self.eta#? => not sure what to choose for eta
+        eta = 1. #self.eta#? => not sure what to choose for eta => 1/\sqrt{\beta_t}
         delta = 0.01
         theta_hat = self._estimator._lls._theta
         V = self._estimator._lls._V
