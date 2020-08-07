@@ -135,10 +135,11 @@ def ids(game_, **params):
     infogain_dict = dict([(f.__name__, f) for f in INFOGAIN])
     infogain = infogain_dict[params.get('infogain', 'full')]
     dids = params.get('dids')
+    anytime = params.get('anytime')
 
     lls = RegularizedLeastSquares(d=game_.get_d())
     estimator = RegretEstimator(game=game_, lls=lls, delta=0.05, truncate=True)
-    strategy = IDS(game_, infogain=infogain, estimator=estimator, deterministic=dids)
+    strategy = IDS(game_, infogain=infogain, estimator=estimator, deterministic=dids, anytime=anytime)
     return strategy
 
 
@@ -238,6 +239,7 @@ def main():
     parser.add_argument('--rep', type=int, default=1)
     parser.add_argument('--infogain', choices=[f.__name__ for f in INFOGAIN])
     parser.add_argument('--dids', action='store_true')
+    parser.add_argument('--anytime', type=bool, default=False)
     parser.add_argument('--laser-indirect', action='store_true', default=False)
     parser.add_argument('--overwrite', action='store_true')
     parser.add_argument('--aggr', choices=[f.__name__ for f in aggregate.AGGREGATORS])

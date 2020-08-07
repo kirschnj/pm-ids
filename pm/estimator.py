@@ -10,6 +10,7 @@ class RegularizedLeastSquares:
         self._d = d
         self._V = np.eye(self._d)
         self._XY = np.zeros(self._d)
+        self._t = 1
         self._update_cache()
 
     def _update_cache(self):
@@ -20,6 +21,7 @@ class RegularizedLeastSquares:
         self._V += x.T.dot(x)
         self._XY += x.T.dot(y)
         self._update_cache()
+        self._t += 1
 
     def theta(self):
         return self._theta
@@ -132,6 +134,3 @@ class RegretEstimator:
         regret = np.max(self._lls.lcb(D, delta=self._delta), axis=0)
 
         return regret
-
-
-

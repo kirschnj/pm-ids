@@ -73,6 +73,7 @@ def compute_nu(estimator, game):
 
         nu[i:] = x.value
 
+    # check corner cases in the bandit case : can the projected nu have a very large norm ? => regularization ?
     #normalize as per our unit ball hypothesis => creates bugs when the projection on the cone is too close to origin. Also does it make sense ?
     # nu /= np.linalg.norm(nu, axis=1)[:, None]
     return nu

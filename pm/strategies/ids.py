@@ -8,7 +8,7 @@ from pm.utils import difference_matrix, compute_nu
 
 
 
-def full(indices, game, estimator):
+def full(indices, game, estimator, q, nu):
     """
     log det(I + A^T V_t^{-1} A)
     """
@@ -33,7 +33,7 @@ def full(indices, game, estimator):
     lower_bound = estimator.regret_lower_2(indices)
     return infogain
 
-def directeducb(indices, game, estimator):
+def directeducb(indices, game, estimator, q, nu):
     """
     First the most uncertain direction w in the set of plausible maximizers is computed,
     then I = log var(w) - log var(w|A)
@@ -70,7 +70,7 @@ def directeducb(indices, game, estimator):
 
     return log_var_w - log_var_wA
 
-def directed2(indices, game, estimator):
+def directed2(indices, game, estimator, q, nu):
     """
     First the most uncertain direction w in the set of plausible maximizers is computed,
     then I = log var(w) - log var(w|A)
@@ -121,7 +121,7 @@ def plausible_maximizers_2(game, estimator):
     return I[lower_bound <= 10e-10]
 
 
-def directed3(indices, game, estimator):
+def directed3(indices, game, estimator, q, nu):
     """
     First the most uncertain direction w in the set of plausible maximizers is computed,
     then I = log var(w) - log var(w|A)
@@ -180,7 +180,8 @@ def directed3(indices, game, estimator):
 
 
 def info_game(indices, game, estimator, q, nu):
-    delta = 0.05 # this should be 1/t but I don't know yet how to do this
+    delta = 1. / estimator.lls._t
+
     I = np.zeros(len(indices)) #to be vectorized
     k = len(indices)
 
@@ -223,16 +224,33 @@ def info_game(indices, game, estimator, q, nu):
 
 class IDS(Strategy):
 
-    def __init__(self, game, estimator, infogain, deterministic=False):
+    def __init__(self, game, estimator, infogain, deterministic=False, anytime=True):
         super().__init__(game, estimator)
         self._infogain = infogain
         self._deterministic = deterministic
+        self.anytime = anytime
+        if self.anytime:
+            self.update= True
 
     def get_next_action(self):
         if self._deterministic:
             return self._dids()
         else:
-            return self._ids()
+            if self.anytime:
+                return self._anytime_ids()
+            else:
+                return self._ids()
+
+    def add_observations(self,indices,y):
+        if not self.anytime:
+            super().add_observations(indices,y)
+
+        else:
+
+            if self.update: #explore and collect data
+                super().add_observations(indices,y)
+            else: # online increase global time count
+                self._estimator.lls._t +=1
 
     def _mixed_ratio(self, A, B, C, D, p_new, ratio, p):
 
@@ -254,17 +272,23 @@ class IDS(Strategy):
         outputs:
         q : K vector containing the constraint mixing for each action (0 for the ucb one)
         """
-        eta = 1. #self.eta#? => not sure what to choose for eta => 1/\sqrt{\beta_t}
-        delta = 0.01
+
+        delta = 1/(self._estimator.lls._t * np.log(self._estimator.lls._t+2)) #= 1/(tlog(t)) adding +1 for numerical issues at initialization
+        eta = 1./ np.sqrt(self._estimator._lls.beta(delta)) #=> 1/\sqrt{\beta_t}
         theta_hat = self._estimator._lls._theta
         V = self._estimator._lls._V
         k = len(indices)
         q = np.zeros(k)
 
         nu = compute_nu(self._estimator._lls, self._game)
-        ucb = self._estimator.ucb(indices)
-        winner = np.argmax(ucb)
-        w = self._game.get_actions(winner)
+        # ucb = self._estimator.ucb(indices)
+        # winner = np.argmax(ucb) # former def of winner
+
+        actions = self._game.get_actions(indices)
+        means = self._estimator._lls.mean(actions)
+        winner = np.argmax(means) #empirical best
+
+        w = actions[winner]
 
         for i in indices:
             if i != winner:
@@ -346,6 +370,60 @@ class IDS(Strategy):
         regret = np.max(self._estimator.ucb(indices)) - self._estimator.lcb(indices)
         ratio = regret**2/infogain
         return indices[np.argmin(ratio)]
+
+    def _anytime_ids(self,b=2):
+        """
+        Compute the IDS solution when there's "enough" data,
+        and otherwise fallback on UCB
+        """
+        #
+        # self.s = 1
+        t = self._estimator.lls._t
+        # print(t)
+        delta_t = 1/(t * np.log(t+2)) # adding +1 to avoid numerical issues at initialization
+        indices = self._game.get_indices()
+        q, nu  = self.oco(indices)
+        actions = self._game.get_actions(indices)
+        means = self._estimator._lls.mean(actions)
+        winner = np.argmax(means) #empirical best
+
+
+
+        theta_hat = self._estimator.lls.theta()
+        V = self._estimator.lls._V
+        info_t = [np.matmul(nu[i,:] - theta_hat, np.matmul(V,nu[i,:] - theta_hat)) if i != winner else 10**6 for i in indices ]
+        # exploration condition
+        # print(min(info_t))
+        # print(self._estimator.lls.beta(delta_t))
+        if np.min(info_t) < self._estimator.lls.beta(delta_t ) :
+            self.update = True #exploration => collect data
+
+            #compute beta_s
+            # accessing s through the Trace of V_s: is it correct ?
+            s = np.sum(np.diag(self._estimator.lls.get_cholesky_factor()[0]))
+            beta_s = self._estimator.lls.beta(1/(s**b+1))
+
+            ucbs = self._estimator.lls.ucb(actions, 1/s**b)
+            gaps = ucbs - means[winner]
+            #compute delta_s
+            delta_s = gaps[winner]
+
+            #check the UCB fallback condition delta_s < gaps/2 for all non-winners
+            if np.min([gaps[y]-(2*delta_s) if y != winner else 1 for y in indices ])>0 :
+                return self._ids()
+            else:
+                return indices[np.argmax(ucbs)]
+
+
+
+        else:
+            self.update=False
+            return winner
+
+
+
+
+
 
     def id(self):
         """
