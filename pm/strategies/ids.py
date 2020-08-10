@@ -249,6 +249,7 @@ class IDS(Strategy):
 
             if self.update: #explore and collect data
                 super().add_observations(indices,y)
+                self._estimator.lls._s += 1
             else: # online increase global time count
                 self._estimator.lls._t +=1
 
@@ -296,8 +297,8 @@ class IDS(Strategy):
                 V_norm = np.matmul(D, np.matmul(V,D))
                 q[i] = np.exp(-eta * (V_norm))
 
-        # normalize
-        q /= np.linalg.norm(q)
+        # normalization is not necessary
+        # q /= np.linalg.norm(q)
         return q , nu
 
     def _ids(self):
@@ -400,7 +401,8 @@ class IDS(Strategy):
 
             #compute beta_s
             # accessing s through the Trace of V_s: is it correct ?
-            s = np.sum(np.diag(self._estimator.lls.get_cholesky_factor()[0]))
+            # s = np.sum(np.diag(self._estimator.lls.get_cholesky_factor()[0]))
+            s = self._estimator.lls._s
             beta_s = self._estimator.lls.beta(1/(s**b+1))
 
             ucbs = self._estimator.lls.ucb(actions, 1/s**b)

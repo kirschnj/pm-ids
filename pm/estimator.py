@@ -11,6 +11,7 @@ class RegularizedLeastSquares:
         self._V = np.eye(self._d)
         self._XY = np.zeros(self._d)
         self._t = 1
+        self._s = 1
         self._update_cache()
 
     def _update_cache(self):
