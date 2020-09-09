@@ -396,7 +396,7 @@ class IDS(Strategy):
         # exploration condition
         # print(min(info_t))
         # print(self._estimator.lls.beta(delta_t))
-        if np.min(info_t) < self._estimator.lls.beta(delta_t ) :
+        if np.min(info_t) < self._estimator.lls.beta(delta_t) :
             self.update = True #exploration => collect data
 
             #compute beta_s
@@ -411,7 +411,7 @@ class IDS(Strategy):
             delta_s = gaps[winner]
 
             #check the UCB fallback condition delta_s < gaps/2 for all non-winners
-            if np.min([gaps[y]-(2*delta_s) if y != winner else 1 for y in indices ])>0 :
+            if np.min([gaps[y]-(2*delta_s) if y != winner else 1 for y in indices ])>0 :  ##UCB fallback parameter
                 return self._ids()
             else:
                 return indices[np.argmax(ucbs)]

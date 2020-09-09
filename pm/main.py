@@ -12,7 +12,7 @@ from pm.games.bandit import Bandit
 from pm.games.pm import GenericPM
 from pm.strategies.ids import IDS, full, directed2, directeducb, directed3, info_game
 from pm.strategies.ucb import UCB
-from pm.utils import query_yes_no, timestamp, fixed_seed, compute_nu
+from pm.utils import query_yes_no, timestamp, fixed_seed, compute_nu, lower_bound
 
 
 def noise_normal(size):
@@ -46,6 +46,19 @@ def simple_bandit(**params):
 
     game = Bandit(X, id="simple_bandit")
     instance = GameInstance(game, theta=np.array([1., 0.]), noise=noise_normal)
+
+    return game, instance
+
+def counter_example(**params):
+    """
+    game factory for the counter-example in the End of Optimism
+    """
+    # alpha = 0.25 such that 8\alpha\epsilon =2\epsilon as in Figure 1
+    eps = 0.01
+    X = np.array([[1.,0.],[1-eps,2*eps],[0.,1.]])
+
+    game = Bandit(X, id="counter_example")
+    instance = GameInstance(game, theta=np.array([1.,0.]), noise=noise_normal)
 
     return game, instance
 
@@ -114,7 +127,7 @@ def laser(**params):
     return game, instance
 
 # list of available games
-GAMES = [simple_bandit, laser]
+GAMES = [simple_bandit, laser, counter_example]
 
 
 def ucb(game_, **params):
@@ -161,6 +174,7 @@ def run(game_factory, strategy_factory, **params):
 
     # other parameters
     n = params.get('n')
+    # lb_return = params.get('lb_return')
 
     outdir = params.get('outdir')
     if not os.path.exists(outdir):
@@ -198,6 +212,8 @@ def run(game_factory, strategy_factory, **params):
 
     outfile = os.path.join(outdir, f"run-{timestamp()}-{uuid.uuid4().hex}.csv")
 
+
+
     data = np.zeros(shape=(n, 2))  # store data for the csv file
     cumulative_regret = 0
 
@@ -217,6 +233,8 @@ def run(game_factory, strategy_factory, **params):
         # get observation and update strategy
         observation = instance.get_noisy_observation(x)
         strategy.add_observations(x, observation)
+
+
 
     # outfile
     np.savetxt(outfile, data)
@@ -243,6 +261,7 @@ def main():
     parser.add_argument('--laser-indirect', action='store_true', default=False)
     parser.add_argument('--overwrite', action='store_true')
     parser.add_argument('--aggr', choices=[f.__name__ for f in aggregate.AGGREGATORS])
+    parser.add_argument('--lb_return', type=bool, default=False)
 
     # parse arguments
     args = vars(parser.parse_args())
@@ -259,11 +278,27 @@ def main():
     aggr = args['aggr']
     del args['aggr']
 
+
+    lb_return = args['lb_return']
+
+
     # run game, possibly multiple times
     for i in range(rep):
         if rep > 1:
             print(f"Running iteration {i}.")
         path = run(game_factory, strategy_factory, **args)
+
+    if lb_return:
+        n = args['n']
+        game, instance = game_factory(**args)
+        outdir = args['outdir']
+        outdir = os.path.join(outdir, f"{game.id()}-{n}", instance.id(), 'lb')
+        # setup output directory
+        os.makedirs(outdir, exist_ok=True)
+        outfile = os.path.join(outdir, f"lb.csv")
+        lb = lower_bound(game,instance)
+        lbn = np.log(np.array(range(n))+1) * lb
+        np.savetxt(outfile, lbn)
 
     # aggregate if requestedpm2 laser ids --n=10000 --outdir=pm-runs/ --infogain=full
     if aggr:
