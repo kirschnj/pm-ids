@@ -12,7 +12,15 @@ def regret(data):
     regret_std = np.std(regret, axis=1)
     return np.vstack([regret_avg, regret_std]).T
 
+def allocations(data):
+    """
+    aggregator for averaged allocations (third column of each csv)
+    """
+    allocations = data[:,2,:]
+    K = np.unique(allocations[0,:])).size
+    allocations_avg = np.apply_along_axis(lambda x:np.histogram(x, bins=K, density=True)[0],0, allocations)
 
+    return allocations_avg
 AGGREGATORS = [regret]
 
 
