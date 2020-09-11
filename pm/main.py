@@ -213,8 +213,7 @@ def run(game_factory, strategy_factory, **params):
     outfile = os.path.join(outdir, f"run-{timestamp()}-{uuid.uuid4().hex}.csv")
 
 
-
-    data = np.zeros(shape=(n, 2))  # store data for the csv file
+    data = np.zeros(shape=(n, 3))  # store data for the csv file
     cumulative_regret = 0
 
     # run game
@@ -227,8 +226,8 @@ def run(game_factory, strategy_factory, **params):
         regret = instance.get_max_reward() - reward
         cumulative_regret += regret
 
-        # store data
-        data[t] = regret, cumulative_regret
+        # store data : regret, cumulative regret, index of arm pulled
+        data[t] = regret, cumulative_regret, str(x)
 
         # get observation and update strategy
         observation = instance.get_noisy_observation(x)
@@ -300,7 +299,7 @@ def main():
         lbn = np.log(np.array(range(n))+1) * lb
         np.savetxt(outfile, lbn)
 
-    # aggregate if requestedpm2 laser ids --n=10000 --outdir=pm-runs/ --infogain=full
+    # aggregate if requested pm2 laser ids --n=10000 --outdir=pm-runs/ --infogain=full
     if aggr:
         aggregator = aggregate.AGGREGATORS[[f.__name__ for f in aggregate.AGGREGATORS] == aggr]
         aggregate.aggregate(path, aggregator)
