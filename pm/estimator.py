@@ -10,7 +10,6 @@ class RegularizedLeastSquares:
         self._d = d
         self._V = np.eye(self._d)
         self._XY = np.zeros(self._d)
-        self._t = 1
         self._s = 1
         self._update_cache()
 
@@ -22,13 +21,20 @@ class RegularizedLeastSquares:
         self._V += x.T.dot(x)
         self._XY += x.T.dot(y)
         self._update_cache()
-        self._t += 1
+        self._s += len(y)
 
+    @property
     def theta(self):
+        """ estimated parameter """
         return self._theta
 
     def mean(self, x):
         return x.dot(self._theta)
+
+    @property
+    def s(self):
+        """ number of data points added to the estimator """
+        return self._s
 
     def var(self, x):
         """
@@ -39,43 +45,49 @@ class RegularizedLeastSquares:
         sol_x = cho_solve(self._cholesky, x.T).T
         return np.sum(x*sol_x, axis=-1)
 
-    def ucb(self, x, delta):
+    def ucb(self, x, delta=None):
         """
         Upper confidence bound for x at confidence level delta
         """
-        return self.mean(x) + self.beta(delta)*np.sqrt(self.var(x))
+        return self.mean(x) + np.sqrt(self.beta(delta) * self.var(x))
 
-    def lcb(self, x, delta):
+    def lcb(self, x, delta=None):
         """
         Upper confidence bound for x at confidence level delta
         """
-        return self.mean(x) - self.beta(delta) * np.sqrt(self.var(x))
+        return self.mean(x) - np.sqrt(self.beta(delta) * self.var(x))
 
-    def beta(self, delta):
+    def beta(self, delta=None):
         """
         compute beta = sqrt(log det(V_t) + 2 log(1/delta)) + 1
         :param delta:
         :return:
         """
+        if delta is None:
+            delta = 1/max(self.s, 3)**2
+
         logdet = 2 * np.sum(np.log(np.diag(self._cholesky[0])))
-        beta = np.sqrt(logdet - 2*np.log(delta)) + 1
+        beta = (np.sqrt(logdet - 2*np.log(delta)) + 1)**2
         return beta
 
     def get_cholesky_factor(self):
         return self._cholesky
 
-    def get_V(self):
+    @property
+    def V(self):
+        """ co-variance matrix of the estimator """
         return self._V
 
 
 class RegretEstimator:
 
-    def __init__(self, game, lls, delta, truncate=True):
+    def __init__(self, game, lls, truncate=True, delta=None, ucb_estimates=True):
         self._truncate = truncate
         self._game = game
         self._d = self._game.get_d()
         self._lls = lls
         self._delta = delta
+        self._ucb_estimates = ucb_estimates  # this flag determines the way the gap upper bound is computed
 
     @property
     def lls(self):
@@ -93,12 +105,12 @@ class RegretEstimator:
     def ucb(self, indices):
         X = self._game.get_actions(indices)
 
-        if self._truncate:
-            return np.minimum(self._lls.ucb(X, delta=self._delta), 1)
+        # if self._truncate:
+        #     return np.minimum(self._lls.ucb(X, delta=self._delta), 1)
 
         return self._lls.ucb(X, delta=self._delta)
 
-    def lcb(self, indices):
+    def lcb(self, indices,):
         X = self._game.get_actions(indices)
         return self._lls.lcb(X, delta=self._delta)
 
@@ -106,25 +118,42 @@ class RegretEstimator:
         X = self._game.get_actions(indices)
         return self._lls.var(X)
 
-    def regret_upper(self, indices):
+    def gap_upper(self, indices):
+        if self._ucb_estimates:
+            return self._gap_upper_1(indices)
+        else:
+            return self._gap_upper_2(indices)
+
+    def _gap_upper_1(self, indices):
         """
-        Regret upper bound
+        Regret upper bound, computed as the ucb of the worst difference vector
         """
         X = self._game.get_actions(indices)
         D = difference_matrix(X)
 
         # compute ucb score for all differences and max out columns
-        regret = np.max(self._lls.ucb(D, delta=self._delta), axis=0)
+        gaps = np.max(self._lls.ucb(D, delta=self._delta), axis=0)
 
         if self._truncate:
-            return np.minimum(regret, 1)
+            gaps = np.minimum(gaps, 1)
 
-        return regret
+        return gaps
 
-    def regret_lower_1(self, indices):
-        raise NotImplemented
+    def _gap_upper_2(self, indices):
+        """
+        Regret upper bound, computed as the max_ucb - mean(x). This is a factor 2 conservative approximation.
+        Does NOT work for partial monitoring games without modification.
+        """
+        X = self._game.get_actions(indices)
+        max_ucb = np.max(self._lls.ucb(X, delta=self._delta))
+        gaps = max_ucb - self._lls.mean(X)
 
-    def regret_lower_2(self, indices):
+        if self._truncate:
+            gaps = np.minimum(gaps, 1)
+
+        return gaps
+
+    def gap_lower_2(self, indices):
         """
         Relaxed regret lower bound
         """

@@ -51,32 +51,13 @@ def difference_matrix(X):
     # compute all differences in a (l,l,d) array
     return (np.repeat(X, l, axis=0) - np.tile(X, (l, 1))).reshape(l, l, d)
 
-def compute_nu(estimator, game):
-    """
-    Compute the alternative parameter for each cell but that of the empirical best arm.
-    """
-    indices = game._I
-    d = game._d
-    X = game.get_actions(indices)
-    theta = estimator._theta
-    V = estimator._V
-    nu = np.zeros((len(indices),d))
-    C = difference_matrix(X)
-    # for each action, solve the quadratic program to find the alternative
-    for i in indices:
-        x = cp.Variable(game._d)
-        q = -2 * (V @ theta)
-        G = -C[i,:,:]
+def psd_norm_squared(x, V):
+  """
+  returns x^T V x, where x is a d-dimensional vector, and V is a d x d matrix.
+  Also works for x of shape (n,x)
+  """
+  return np.sum(x.T * np.dot(V,x.T), axis=0)
 
-        prob = cp.Problem(cp.Minimize(cp.quad_form(x, V) + q.T @ x), [G @  x <= 0])
-        prob.solve()
-
-        nu[i:] = x.value
-
-    # check corner cases in the bandit case : can the projected nu have a very large norm ? => regularization ?
-    #normalize as per our unit ball hypothesis => creates bugs when the projection on the cone is too close to origin. Also does it make sense ?
-    # nu /= np.linalg.norm(nu, axis=1)[:, None]
-    return nu
 
 # def optimization(A, Delta, ft):
 #
@@ -119,7 +100,7 @@ def lower_bound(game, instance, print_sol=False):
     A = game.get_actions(ind) #all actions shape (K * d)
     K, d = A.shape
     means = instance.get_reward(ind)
-    max_reward = instance.get_max_reward()
+    max_reward = instance.max_reward()
     Delta = max_reward - means
     zero_index = np.where(Delta == 0)[0]
     b=(Delta**2 /2)

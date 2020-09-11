@@ -55,7 +55,7 @@ class MyTestCase(unittest.TestCase):
             for j in range(5):
                 w = X[i] - X[j]
                 # check if i and j are plausible maximizers
-                if np.all(estimator.regret_lower_2([i,j]) <= 10e-10):
+                if np.all(estimator.gap_lower_2([i, j]) <= 10e-10):
                     if lls.var(w) > max_var:
                         max_var = lls.var(w)
                         max_w = w

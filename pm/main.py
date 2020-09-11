@@ -10,9 +10,9 @@ from pm.estimator import RegularizedLeastSquares, RegretEstimator
 from pm.game import GameInstance
 from pm.games.bandit import Bandit
 from pm.games.pm import GenericPM
-from pm.strategies.ids import IDS, full, directed2, directeducb, directed3, info_game
+from pm.strategies.ids import IDS, AsymptoticIDS, full, directed2, directeducb, directed3
 from pm.strategies.ucb import UCB
-from pm.utils import query_yes_no, timestamp, fixed_seed, compute_nu, lower_bound
+from pm.utils import query_yes_no, timestamp, fixed_seed, lower_bound
 
 
 def noise_normal(size):
@@ -134,8 +134,9 @@ def ucb(game_, **params):
     """
     strategy factory for UCB
     """
+    delta = params.get('delta')
     lls = RegularizedLeastSquares(d=game_.get_d())
-    estimator = RegretEstimator(game=game_, lls=lls, delta=0.05, truncate=False)
+    estimator = RegretEstimator(game=game_, lls=lls, delta=delta, truncate=False)
     strategy = UCB(game_, estimator=estimator)
     return strategy
 
@@ -148,18 +149,29 @@ def ids(game_, **params):
     infogain_dict = dict([(f.__name__, f) for f in INFOGAIN])
     infogain = infogain_dict[params.get('infogain', 'full')]
     dids = params.get('dids')
-    anytime = params.get('anytime')
+    delta = params.get('delta')
 
     lls = RegularizedLeastSquares(d=game_.get_d())
-    estimator = RegretEstimator(game=game_, lls=lls, delta=0.05, truncate=True)
-    strategy = IDS(game_, infogain=infogain, estimator=estimator, deterministic=dids, anytime=anytime)
+    estimator = RegretEstimator(game=game_, lls=lls, delta=delta, truncate=False)
+    strategy = IDS(game_, infogain=infogain, estimator=estimator, deterministic=dids)
+    return strategy
+
+def asymptotic_ids(game_, **params):
+    lls = RegularizedLeastSquares(d=game_.get_d())
+    delta = params.get('delta')
+    if delta is not None:
+        print("WARNING: Setting delta has no effect for asymptotic_ids")
+    # anytime estimator
+    estimator = RegretEstimator(game=game_, lls=lls, delta=None, truncate=True, ucb_estimates=False)
+    strategy = AsymptoticIDS(game_, estimator=estimator)
     return strategy
 
 
+
 # list of available strategies
-STRATEGIES = [ucb, ids]
+STRATEGIES = [ucb, ids, asymptotic_ids]
 # list of available info gains for IDS
-INFOGAIN = [full, directed2, directed3, directeducb, info_game]
+INFOGAIN = [full, directed2, directed3, directeducb]
 
 
 def run(game_factory, strategy_factory, **params):
@@ -168,6 +180,7 @@ def run(game_factory, strategy_factory, **params):
     """
     # setup game and instance
     game, instance = game_factory(**params)
+    print(f"Minimum gap of game: {instance.min_gap()}")
 
     # setup strategy
     strategy = strategy_factory(game, **params)
@@ -213,7 +226,7 @@ def run(game_factory, strategy_factory, **params):
     outfile = os.path.join(outdir, f"run-{timestamp()}-{uuid.uuid4().hex}.csv")
 
 
-    data = np.zeros(shape=(n, 3))  # store data for the csv file
+    data = np.empty(shape=(n), dtype=([('regret', 'f8'), ('cum_regret', 'f8'), ('action', 'i8')]))  # store data for the csv file
     cumulative_regret = 0
 
     # run game
@@ -223,20 +236,18 @@ def run(game_factory, strategy_factory, **params):
 
         # compute reward and regret
         reward = instance.get_reward(x)
-        regret = instance.get_max_reward() - reward
+        regret = instance.max_reward() - reward
         cumulative_regret += regret
 
         # store data : regret, cumulative regret, index of arm pulled
-        data[t] = regret, cumulative_regret, str(x)
+        data[t] = regret, cumulative_regret, x[0]
 
         # get observation and update strategy
         observation = instance.get_noisy_observation(x)
         strategy.add_observations(x, observation)
 
-
-
     # outfile
-    np.savetxt(outfile, data)
+    np.savetxt(outfile, data, fmt=['%f', '%f', '%i'])
 
     return outdir
 
@@ -256,7 +267,7 @@ def main():
     parser.add_argument('--rep', type=int, default=1)
     parser.add_argument('--infogain', choices=[f.__name__ for f in INFOGAIN])
     parser.add_argument('--dids', action='store_true')
-    parser.add_argument('--anytime', action='store_true', default=False)
+    parser.add_argument('--delta', type=float, default=None)
     parser.add_argument('--laser-indirect', action='store_true', default=False)
     parser.add_argument('--overwrite', action='store_true')
     parser.add_argument('--aggr', choices=[f.__name__ for f in aggregate.AGGREGATORS])

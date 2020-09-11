@@ -5,7 +5,9 @@ from numpy.testing import assert_almost_equal
 from pm.estimator import RegularizedLeastSquares, RegretEstimator
 from pm.games.bandit import Bandit
 
-from pm.strategies.optids import compute_nu
+
+# TODO: fix this test
+# from pm.strategies.optids import compute_nu
 from scipy.linalg import cho_solve
 
 class MyTestCase(unittest.TestCase):
