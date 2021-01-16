@@ -326,6 +326,7 @@ class AsymptoticIDS(IDS):
         and otherwise fallback on UCB
         """
         indices = self._game.get_indices()
+        #we may want to try other values for beta_t
         beta_t = self._estimator.lls.beta(1/(self._t * np.log(self._t + 2)))  # adding +1 to avoid numerical issues at initialization
 
         # only re-compute quantities when the estimator changes
@@ -356,16 +357,16 @@ class AsymptoticIDS(IDS):
             # print(gaps)
             # print(delta_s)
             # check IDS condition 2 delta_s <= ^Delta(y)
-            if np.sum(gaps < 2 * delta_s) == 1:
-                print(f"explore ids {self._t}")
+            # if np.sum(gaps < 2 * delta_s) == 1:
+                # print(f"explore ids {self._t}")
 
-                infogain = self._info_game(indices, winner, nu, beta_t, V_norm)
-                return self._ids_sample(indices, gaps, infogain)
-            else:
-                # print(f"explore ucb {self._t}")
-                # play UCB
-                ucbs = self._estimator.ucb(indices)
-                return indices[np.argmax(ucbs)]
+            infogain = self._info_game(indices, winner, nu, beta_t, V_norm)
+            return self._ids_sample(indices, gaps, infogain)
+            # else:
+            #     # print(f"explore ucb {self._t}")
+            #     # play UCB
+            #     ucbs = self._estimator.ucb(indices)
+            #     return indices[np.argmax(ucbs)]
         else:
             # print("exploit")
             self._update_estimator = False
