@@ -295,7 +295,7 @@ class AsymptoticIDS(IDS):
 
     def compute_nu(self, indices):
         """
-        Compute the alternative parameters and Vnorm for each cell but that of the empirical best arm.
+        Compute the alternative parameters and Vnorm for each cell
         """
         d = self._game.d
         X = self._game.get_actions(indices)
@@ -322,8 +322,8 @@ class AsymptoticIDS(IDS):
 
     def get_next_action(self):
         """
-        Compute the IDS solution when there's "enough" data,
-        and otherwise fallback on UCB
+        Compute the IDS solution when there's "enough" data.
+        Deprecated : and otherwise fallback on UCB
         """
         indices = self._game.get_indices()
         #we may want to try other values for beta_t

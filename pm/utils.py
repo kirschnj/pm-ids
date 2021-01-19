@@ -54,7 +54,7 @@ def difference_matrix(X):
 def psd_norm_squared(x, V):
   """
   returns x^T V x, where x is a d-dimensional vector, and V is a d x d matrix.
-  Also works for x of shape (n,x)
+  Also works for x of shape (n,d)
   """
   return np.sum(x.T * np.dot(V,x.T), axis=0)
 

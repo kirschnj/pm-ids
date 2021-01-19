@@ -12,6 +12,7 @@ from pm.games.bandit import Bandit
 from pm.games.pm import GenericPM
 from pm.strategies.ids import IDS, AsymptoticIDS, full, directed2, directeducb, directed3
 from pm.strategies.ucb import UCB
+from pm.strategies.solid import Solid 
 from pm.utils import query_yes_no, timestamp, fixed_seed, lower_bound
 
 
@@ -166,10 +167,30 @@ def asymptotic_ids(game_, **params):
     strategy = AsymptoticIDS(game_, estimator=estimator)
     return strategy
 
+def solid(game_, **params):
+    lls = RegularizedLeastSquares(d=game_.get_d())
+    # lambda_1=0., z_0=30, alpha_l=0.1, alpha_w = 0.5, lambda_max=10
+    # if params.get('lambda_1') is not None:
+    #     lambda_1 = params.get('lambda_1')
+    #
+    # if params.get('z_0') is not None:
+    #     z_0 = params.get('z_0')
+    # if params.get('alpha_l') is not None:
+    #     alpha_l = params.get('alpha_l')
+    # if params.get('alpha_w') is not None:
+    #     alpha_l = params.get('alpha_w')
+    # if params.get('lambda_max') is not None:
+    #     lambda_1 = params.get('lambda_max')
+
+    estimator = RegretEstimator(game=game_, lls=lls, delta=None)
+    startegy = Solid(game_, estimator=estimator) #default values already set
+    return startegy
+
+
 
 
 # list of available strategies
-STRATEGIES = [ucb, ids, asymptotic_ids]
+STRATEGIES = [ucb, ids, asymptotic_ids, solid]
 # list of available info gains for IDS
 INFOGAIN = [full, directed2, directed3, directeducb]
 

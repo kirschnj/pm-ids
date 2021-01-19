@@ -102,13 +102,15 @@ class RegretEstimator:
         # update lls
         self._lls.add_data(ax, y)
 
-    def ucb(self, indices):
+    def ucb(self, indices, delta=None):
         X = self._game.get_actions(indices)
 
         # if self._truncate:
         #     return np.minimum(self._lls.ucb(X, delta=self._delta), 1)
-
-        return self._lls.ucb(X, delta=self._delta)
+        if delta == None:
+            return self._lls.ucb(X, delta=self._delta)
+        else:
+            return self._lls.ucb(X, delta=delta)
 
     def lcb(self, indices,):
         X = self._game.get_actions(indices)
