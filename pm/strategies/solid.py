@@ -65,7 +65,6 @@ class Solid(Strategy):
         means = self._estimator.lls.mean(self._game.get_actions(indices))
         self._winner = np.argmax(means)
 
-
         V_norm_tmp = V_norm.copy()
 
         # compute minimum V-norm without winner
@@ -134,10 +133,14 @@ class Solid(Strategy):
 
         self._min_V_norm = min_V_norm
 
+        #recompute at every round because estimator changes
+        means = self._estimator.lls.mean(self._game.get_actions(indices))
+        self._winner = np.argmax(means)
+
         if self._min_V_norm > beta_t:
             #exploitation step
 
-            return winner
+            return self._winner
 
         else:
             chosen_action = np.random.choice(indices, p=self.w_t)
