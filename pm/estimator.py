@@ -64,10 +64,10 @@ class RegularizedLeastSquares:
         :return:
         """
         if delta is None:
-            delta = 1/max(self.s, 3)**2
-
+            _s = max(self.s, 2.)
+            delta = 1/(_s*np.log(_s))
         logdet = 2 * np.sum(np.log(np.diag(self._cholesky[0])))
-        beta = (np.sqrt(logdet - 2*np.log(delta)) + 1)**2
+        beta = (np.sqrt(logdet + 2*np.log(1/delta)) + 1)**2
         return beta
 
     def get_cholesky_factor(self):

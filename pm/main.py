@@ -160,11 +160,14 @@ def ids(game_, **params):
 def asymptotic_ids(game_, **params):
     lls = RegularizedLeastSquares(d=game_.get_d())
     delta = params.get('delta')
+    fast_ratio = params.get('fast_ratio', False)
+    lower_bound_gap = params.get('lower_bound_gap', False)
+
     if delta is not None:
         print("WARNING: Setting delta has no effect for asymptotic_ids")
     # anytime estimator
     estimator = RegretEstimator(game=game_, lls=lls, delta=None, truncate=True, ucb_estimates=False)
-    strategy = AsymptoticIDS(game_, estimator=estimator)
+    strategy = AsymptoticIDS(game_, estimator=estimator, fast_ratio=fast_ratio, lower_bound_gap=lower_bound_gap)
     return strategy
 
 def solid(game_, **params):
@@ -183,8 +186,8 @@ def solid(game_, **params):
     #     lambda_1 = params.get('lambda_max')
 
     estimator = RegretEstimator(game=game_, lls=lls, delta=None)
-    startegy = Solid(game_, estimator=estimator) #default values already set
-    return startegy
+    strategy = Solid(game_, estimator=estimator) #default values already set
+    return strategy
 
 
 
@@ -293,6 +296,8 @@ def main():
     parser.add_argument('--overwrite', action='store_true')
     parser.add_argument('--aggr', choices=[f.__name__ for f in aggregate.AGGREGATORS])
     parser.add_argument('--lb_return', type=bool, default=False)
+    parser.add_argument('--fast_ratio', type=bool, default=False)
+    parser.add_argument('--lower_bound_gaps', type=bool, default=False)
 
     # parse arguments
     args = vars(parser.parse_args())
