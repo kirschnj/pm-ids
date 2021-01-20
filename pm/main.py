@@ -9,8 +9,10 @@ from pm import aggregate
 from pm.estimator import RegularizedLeastSquares, RegretEstimator
 from pm.game import GameInstance
 from pm.games.bandit import Bandit
+from pm.games.confounded import Confounded
 from pm.games.pm import GenericPM
 from pm.strategies.ids import IDS, full, directed2, directeducb, directed3
+from pm.strategies.two import Two, InternalDuelingGame
 from pm.strategies.ucb import UCB
 from pm.utils import query_yes_no, timestamp, fixed_seed
 
@@ -47,6 +49,14 @@ def simple_bandit(**params):
     game = Bandit(X, id="simple_bandit")
     instance = GameInstance(game, theta=np.array([1., 0.]), noise=noise_normal)
 
+    return game, instance
+
+def sin_lin_confounding(t):
+    return 20*np.sin(0.2*t) + t
+
+def confounded_simple_bandit(**params):
+    game, instance = simple_bandit(**params)
+    instance = Confounded(game, instance, sin_lin_confounding)
     return game, instance
 
 
@@ -114,7 +124,7 @@ def laser(**params):
     return game, instance
 
 # list of available games
-GAMES = [simple_bandit, laser]
+GAMES = [simple_bandit, laser, confounded_simple_bandit]
 
 
 def ucb(game_, **params):
@@ -141,9 +151,23 @@ def ids(game_, **params):
     strategy = IDS(game_, infogain=infogain, estimator=estimator, deterministic=dids)
     return strategy
 
+def ids_two(game_, **params):
+    # print(game_.get_actions(game_.get_indices()))
+    # print(game_.get_observation_maps(game_.get_indices()))
+
+    two_game = InternalDuelingGame(game_)
+
+    # print(two_game.get_indices())
+    # print(two_game.get_observation_maps(two_game.get_indices()))
+    #
+    # exit()
+    ids_strategy = ids(two_game, **params)
+    two = Two(ids_strategy)
+    return two
+
 
 # list of available strategies
-STRATEGIES = [ucb, ids]
+STRATEGIES = [ucb, ids, ids_two]
 # list of available info gains for IDS
 INFOGAIN = [full, directed2, directed3, directeducb]
 
