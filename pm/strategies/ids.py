@@ -179,12 +179,16 @@ def directed3(indices, game, estimator):
 
 class IDS(Strategy):
 
-    def __init__(self, game, estimator, infogain, deterministic=False):
+    def __init__(self, game, estimator, infogain, deterministic=False, fast_ratio=False):
+        """
+        fast_ratio=True: compute minimizing distribution only between empirical maximizer + one other action
+        """
         super().__init__(game, estimator)
         self._infogain = infogain
         self._deterministic = deterministic
         self._update_estimator = True
         self._t = 1  # step counter
+        self._fast_ratio = fast_ratio
 
     def get_next_action(self):
         indices = self._game.get_indices()
@@ -203,66 +207,78 @@ class IDS(Strategy):
 
         self._t += 1  # increase step counter each time we get the data
 
-    def _mixed_ratio(self, A, B, C, D, p_new, ratio, p):
+    def _two_action_ratio(self, D1, D2, I1, I2):
+        """
+        computes optimal trade-off between two actions
+        p_min = argmin_p ((1-p)*D1 + p*D2)**2/((1-p)*I1 + p*I2)
+        returns p_min, Psi(p_min)
+        """
 
-        # invalid x, return previous ratio
-        if p_new < 0 or p_new > 1:
-            return ratio, p
+        # if info gain is zero for both action, randomize uniformly
+        if I1 == 0. and I2 == 0.:
+            return 0.5, np.inf
 
-        # if the ratio is better with x, return new ratio and x
-        tmp_ratio = (p_new * A + (1 - p_new) * B) ** 2 / (p_new * C + (1 - p_new) * D)
-        if tmp_ratio < ratio:
-            return tmp_ratio, p_new
+        # make sure that D1 <= D2 by flipping the actions if necessary
+        if D2 < D1:
+            D1, D2 = D2, D1
+            I1, I2 = I2, I1
+            flip = True
+        else:
+            flip = False
 
-        return ratio, p
+        if I1 >= I2:
+            p = 0.
+            ratio = D1**2/I1
+        elif D1 == D2: # I1 < I2
+            p = 1.
+            ratio = D2**2/I2
+        else:
+            p = D1/(D2 - D1) - 2*I1/(I2 - I1)
+            p = max(0., min(1., p))  # clip to [0,1]
+            ratio = ((1-p)*D1 + p*D2)**2/((1-p)*I1 + p*I2)
+
+        if flip:
+            p = 1. - p
+
+        return p, ratio
 
     def _ids_sample(self, indices, gaps, infogain):
         """
         Compute the randomized IDS solution
         https://www.wolframalpha.com/input/?i=d%2Fdx+(Ax+%2B+(1-x)*B)^2%2F(Cx+%2B+(1-x)D)+
         """
+        if self._fast_ratio:
+            winner = np.argmin(gaps)
+
         best_p = None
         best_i = None
         best_j = None
-        best_ratio = 10e10
+        best_ratio = np.inf
 
-        for i in range(len(indices)):
-            for j in range(len(indices)):
-                ratio = 10e10
-                p = None
-                A, B, C, D = gaps[i], gaps[j], infogain[i], infogain[j]
+        for j in range(len(indices)):
+            # if the fast_ratio flag is set, compute the ratio only between j and the winner
+            if self._fast_ratio:
+                inner_range = [winner]
+            else:
+                inner_range = range(j+1,len(indices))
 
-                # deterministic on i
-                if infogain[i] > 0:
-                    ratio, p = self._mixed_ratio(A, B, C, D, 1., ratio, p)
+            for i in inner_range:
 
-                # deterministic on j
-                if infogain[j] > 0:
-                    ratio, p = self._mixed_ratio(A, B, C, D, 0., ratio, p)
+                D1, D2 = gaps[i], gaps[j]
+                I1, I2 = infogain[i], infogain[j]
 
-                # mixed solution
-                if np.abs(C - D) > 10e-20 and np.abs(B - A) > 10e-20:
-                    x = D/(C-D)
-                    ratio, p = self._mixed_ratio(A, B, C, D, x, ratio, p)
-
-                    x = B/(B-A)
-                    ratio, p = self._mixed_ratio(A, B, C, D, x, ratio, p)
-
-                    x = (2*A*D - B*C - B*D)/(B-A)/(C-D)
-                    ratio, p = self._mixed_ratio(A, B, C, D, x, ratio, p)
+                p, ratio = self._two_action_ratio(D1, D2, I1, I2)
 
                 if ratio < best_ratio:
                     best_ratio = ratio
                     best_i, best_j = i, j
                     best_p = p
 
-                if i == j:
-                    break
-
+        # p=1 means we pick j
         if np.random.binomial(1, p=best_p):
-            return indices[best_i]
-        else:
             return indices[best_j]
+        else:
+            return indices[best_i]
 
     def id(self):
         """
@@ -279,18 +295,37 @@ class IDS(Strategy):
 
 class AsymptoticIDS(IDS):
 
-    def __init__(self, game, estimator):
-        super().__init__(game, estimator, infogain=None, deterministic=False)
+    def __init__(self, game, estimator, fast_ratio=False, lower_bound_gap=False):
+        self.lower_bound_gap = lower_bound_gap
+        self.mms = 1.
+        super().__init__(game, estimator, infogain=None, deterministic=False, fast_ratio=fast_ratio)
 
     def _info_game(self, indices, winner, nu, beta, V_norm):
         # compute mixing weights
-        eta = 1. / np.sqrt(beta)
-        q = np.exp(-eta * V_norm)
+        eta = 1. / np.sqrt(self.mms)
+        q = np.exp(- eta * V_norm)
         q[winner] = 0.
+        iucb = np.argmax(self._estimator.ucb(indices))
 
         # compute info gain
         X = self._game.get_actions(indices)
-        I = q @ ((nu - self._estimator.lls.theta) @ X.T)**2  # compute sum_y q(y) <nu(y) - theta, x>^2 for each x
+        # TODO: include optimistic terms
+        lls = self._estimator.lls
+        # compute sum_y q(y) (|<nu(y) - theta, x>| + beta_s^{1/2}\|x\|_{V_s^{-1}})^2 for each x
+
+        # Johannes 20.1.2021:
+        # the optimistic part of the information gain is to make asymptotic information gain robust
+        # in the case when the estimates are inaccurate. Also this parts guarantees the worst-case bounds.
+
+        # Option 1, from the paper:
+        I_optimistic = np.sqrt(lls.beta()*lls.var(X))
+
+        # Option 2, focus on UCB action in finite time regime:
+        # This one improves performance in finite time, but pushes the regime switch, it seems
+        # I_optimistic = np.zeros(len(indices))
+        # I_optimistic[iucb] = np.sqrt(lls.beta()*lls.var(X[iucb]))
+
+        I = q @ (np.abs((nu - lls.theta) @ X.T) + I_optimistic)**2
         return I
 
     def compute_nu(self, indices):
@@ -323,11 +358,11 @@ class AsymptoticIDS(IDS):
     def get_next_action(self):
         """
         Compute the IDS solution when there's "enough" data.
-        Deprecated : and otherwise fallback on UCB
         """
         indices = self._game.get_indices()
         #we may want to try other values for beta_t
-        beta_t = self._estimator.lls.beta(1/(self._t * np.log(self._t + 2)))  # adding +1 to avoid numerical issues at initialization
+        _t = max(2, self._t)
+        beta_t = self._estimator.lls.beta(1/(_t * np.log(_t)))  # adding +1 to avoid numerical issues at initialization
 
         # only re-compute quantities when the estimator changes
         if self._update_estimator:
@@ -341,34 +376,31 @@ class AsymptoticIDS(IDS):
 
             # compute minimum V-norm without winner
             V_norm_tmp[self._winner] = np.Infinity
-            self._min_V_norm = np.min(V_norm_tmp)
-
+            self.ms = np.min(V_norm_tmp)
+            # maximum observed distance to closest parameter, used in learning rate
+            self.mms = np.max([self.ms, self.mms])
 
         winner, V_norm, nu = self._winner, self._V_norm, self._nu
 
         # check exploration/exploitation condition
-        if self._min_V_norm < beta_t:
+        if self.ms < beta_t:
+            # print(self.ms, beta_t, self._t, np.log(_t))
             self._update_estimator = True  # exploration => collect data
 
             gaps = self._estimator.gap_upper(indices)
-            delta_s = gaps[winner]  # smallest gap
+            delta_s = gaps[winner]
 
-            # print()
-            # print(gaps)
-            # print(delta_s)
-            # check IDS condition 2 delta_s <= ^Delta(y)
-            # if np.sum(gaps < 2 * delta_s) == 1:
-                # print(f"explore ids {self._t}")
+            # Johannes (20.01.2021): This option needs to be explored because of a corner case in the analysis
+            if self.lower_bound_gap:
+                gaps += np.max(1/np.sqrt(self._estimator.lls.s) - delta_s, 0)
+
+            if delta_s < 1/np.sqrt(self._estimator.lls.s):
+                print("minimum gap too small?")
 
             infogain = self._info_game(indices, winner, nu, beta_t, V_norm)
             return self._ids_sample(indices, gaps, infogain)
-            # else:
-            #     # print(f"explore ucb {self._t}")
-            #     # play UCB
-            #     ucbs = self._estimator.ucb(indices)
-            #     return indices[np.argmax(ucbs)]
         else:
-            # print("exploit")
+            print("exploit")
             self._update_estimator = False
             return winner
 
