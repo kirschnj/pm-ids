@@ -7,7 +7,7 @@ import cvxpy as cp
 
 
 class Solid(Strategy):
-    def __init__(self, game, estimator, lambda_1=0., z_0=30, alpha_l=0.1, alpha_w = 0.5, lambda_max=10):
+    def __init__(self, game, estimator, lambda_1=0., z_0=100, alpha_l=0.1, alpha_w = 0.5, lambda_max=10):
         #check default values of parameters
         super().__init__(game, estimator)
         self.lambda_t = lambda_1
@@ -31,94 +31,86 @@ class Solid(Strategy):
 
 
 
-    def compute_alt(self, indices, V_matrix, theta=None):
-        """
-        Generic function of the compute_nu from ids for different V_matrices
-        Compute the alternative parameters and V_matrix-norm (squared) for each cell
-        and returns the minimum norm and the corresponding parameter vector.
-        """
-        d = self._game.d
-        X = self._game.get_actions(indices)
-        if theta == None:
-            theta = self._estimator.lls.theta
-        else :
-            theta = theta.copy()
-        nu = np.zeros((len(indices), d))
-        C = difference_matrix(X)
-        # for each action, solve the quadratic program to find the alternative
-        for i in indices:
-            x = cp.Variable(d)
-            q = -2 * (V_matrix @ theta)
-            G = -C[i, :, :]
-
-            prob = cp.Problem(cp.Minimize(cp.quad_form(x, V_matrix) + q.T @ x), [G @ x <= 0])
-            prob.solve()
-
-            nu[i,:] = x.value
-
-        # check corner cases in the bandit case : can the projected nu have a very large norm ? => regularization ?
-        # normalize as per our unit ball hypothesis => creates bugs when the projection on the cone is too close to origin. Also does it make sense ?
-        # nu /= np.linalg.norm(nu, axis=1)[:, None]
-        V_norm = psd_norm_squared(nu - theta, V_matrix)
-
-        #recompute at every round because estimator changes
-        means = self._estimator.lls.mean(self._game.get_actions(indices))
-        self._winner = np.argmax(means)
-
-        V_norm_tmp = V_norm.copy()
-
-        # compute minimum V-norm without winner
-        V_norm_tmp[self._winner] = np.Infinity
-        min_V_norm = np.min(V_norm_tmp)
-        ind_min = np.argmin(V_norm_tmp)
-
-        return nu[ind_min,:], min_V_norm
-
     def compute_q(self):
         indices = self._game.get_indices()
-        X = self._game.get_actions(indices)
 
         # compute df_t
         delta_f_t = self._estimator.ucb(indices, delta=1/self.explo_rounds)
 
         #compute dg_t
 
-        # weighted matrix \sum_a w_a aa^T
-        # print(self.w_t[0]*np.outer(X[0,:],X[0,:]))
-        Vw = self.w_t[0] * np.outer(X[0,:],X[0,:])
-        for a in indices[1:]:
-            Vw = np.add(Vw, self.w_t[a] * np.outer(X[a,:],X[a,:]) )
+        # compute approx derivative of first term using (g(w+eps)-g(w))/eps
+        #Warning : may be numerically unstable
+        Vw = self.get_Vw(indices)
+        VW_eps = self.get_Vw(indices, eps=0.01)
+        diff_eps = np.min(self.get_info_ratios(VW_eps)) - np.min(self.get_info_ratios(Vw))
+        diff_eps /= 0.01
 
 
-        # print('Vw is '+ str(Vw))
 
-        theta_alt, W_norm_min = self.compute_alt(indices, Vw)
+        # sq_gaps = (self._means - self._means[self._winner])**2
 
-        gaps_sq = (X @ (self._estimator.lls.theta - theta_alt)) ** 2
+        delta_g_t = diff_eps + np.sqrt(self._estimator.lls.beta(1/self.explo_rounds) * self._estimator.var(indices))
 
-        delta_g_t = gaps_sq + np.sqrt(self._estimator.lls.beta(1/self.explo_rounds) * self._estimator.var(indices))
-
-        return delta_f_t + self.lambda_t * delta_g_t, theta_alt, W_norm_min
+        return delta_f_t + self.lambda_t * delta_g_t
 
 
 
     def update_alphas(self):
         return 1/np.sqrt(self.p_k), 1/np.sqrt(self.p_k)
 
+    def get_Vw(self, indices, eps=0.):
+        X = self._game.get_actions(indices)
+        Vw = np.zeros((self._game.d, self._game.d))
+        for a in indices:
+            Vw = np.add(Vw, ((self.w_t[a]+eps) * np.outer(X[a,:],X[a,:]) ))
+
+        return Vw
+
     def update_w_l(self, indices):
         X = self._game.get_actions(indices)
+
+        # update w_t
+
+
         #compute q_t(x,a)
-        q_t, theta_alt, W_norm_min = self.compute_q()
+        q_t= self.compute_q()
 
         softmax = np.exp(self.alpha_w * q_t)
 
         self.w_t = np.multiply(self.w_t,softmax)
         self.w_t /= np.sum(self.w_t)
 
-        g_t = W_norm_min + np.dot(self.w_t, np.sqrt(self._estimator.lls.beta(1/self.explo_rounds) * self._estimator.var(indices))) - 1/self.z_k
-        self.lambda_t = np.min([self.lambda_t - self.alpha_l*g_t, self.lambda_max])
+        #update lambda_t :
+        Vw = self.get_Vw(indices)
+        min_Vw_norm = np.min(self.get_info_ratios(Vw))
+
+        g_t = min_Vw_norm + np.dot(self.w_t, np.sqrt(self._estimator.lls.beta(1/self.explo_rounds) * self._estimator.var(indices))) - 1/self.z_k
+        # print(g_t)
+        self.lambda_t = np.max([0,np.min([self.lambda_t - self.alpha_l*g_t, self.lambda_max])])
 
 
+
+
+    def get_info_ratios(self,  V_matrix):
+        # Warning, also updates the winner and means
+
+        indices = self._game.get_indices()
+        X = self._game.get_actions(indices)
+        self._means = self._estimator.lls.mean(self._game.get_actions(indices))
+        self._winner = np.argmax(self._means)
+        X_win = X[self._winner,:]
+
+
+
+        sq_norms = psd_norm_squared(X - X_win, V_matrix)
+        sq_norms[self._winner] = 1 ## to avoid numerical problems, returns a null ratio
+        sq_gaps = (self._means - self._means[self._winner])**2
+        sq_gaps[self._winner] = 10000
+
+
+
+        return  np.divide(sq_gaps,sq_norms)
 
 
 
@@ -129,16 +121,22 @@ class Solid(Strategy):
         beta_t = self._estimator.lls.beta(1/(self._t * np.log(self._t + 2)))  # adding +1 to avoid numerical issues at initialization
 
 
-        theta_min, min_V_norm = self.compute_alt(indices, self._estimator.lls.V)
+        # theta_min, min_V_norm = self.compute_alt(indices, self._estimator.lls.V)
+        #
+        # self._min_V_norm = min_V_norm
 
-        self._min_V_norm = min_V_norm
+        # compute the minimum "information ratio" as in Eq 80 of Ap K
+        inf_ratios = self.get_info_ratios(self._estimator.lls.V)
+        # print(inf_ratios)
+        self._min_ratio = np.min(inf_ratios)
 
-        #recompute at every round because estimator changes
-        means = self._estimator.lls.mean(self._game.get_actions(indices))
-        self._winner = np.argmax(means)
+        # print(self._min_ratio)
+        # print(beta_t)
 
-        if self._min_V_norm > beta_t:
+        if self._min_ratio > beta_t:
             #exploitation step
+            #recompute at every round because estimator changes
+            print('exploitation !')
 
             return self._winner
 
@@ -151,10 +149,13 @@ class Solid(Strategy):
 
             if self.phase_length == self.p_k:
                 #update phase counters
+                print('increasing phase: '+str(self.phase_length))
                 self.phase += 1
                 self.phase_length = 0
                 self.z_k *= np.exp(self.phase / (self.phase -1 ))
-                self.p_k = self.z_k * np.exp(2*self.phase)
+                self.z_k = np.floor(self.z_k)
+                self.p_k = np.int(self.z_k * np.exp(self.phase)) #removed the 2* in exp
+                print('next phase is ' + str(self.p_k))
                 # updates alphas
                 self.alpha_w , self.alpha_l = self.update_alphas()
                 #reset
