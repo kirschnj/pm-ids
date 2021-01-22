@@ -12,7 +12,7 @@ from pm.games.bandit import Bandit
 from pm.games.pm import GenericPM
 from pm.strategies.ids import IDS, AsymptoticIDS, full, directed2, directeducb, directed3
 from pm.strategies.ucb import UCB
-from pm.strategies.solid import Solid 
+from pm.strategies.solid import Solid
 from pm.utils import query_yes_no, timestamp, fixed_seed, lower_bound
 
 
@@ -162,12 +162,13 @@ def asymptotic_ids(game_, **params):
     delta = params.get('delta')
     fast_ratio = params.get('fast_ratio', False)
     lower_bound_gap = params.get('lower_bound_gap', False)
+    opt2 = params.get('opt2', False)
 
     if delta is not None:
         print("WARNING: Setting delta has no effect for asymptotic_ids")
     # anytime estimator
     estimator = RegretEstimator(game=game_, lls=lls, delta=None, truncate=True, ucb_estimates=False)
-    strategy = AsymptoticIDS(game_, estimator=estimator, fast_ratio=fast_ratio, lower_bound_gap=lower_bound_gap)
+    strategy = AsymptoticIDS(game_, estimator=estimator, fast_ratio=fast_ratio, lower_bound_gap=lower_bound_gap, opt2=opt2)
     return strategy
 
 def solid(game_, **params):
@@ -204,6 +205,7 @@ def run(game_factory, strategy_factory, **params):
     """
     # setup game and instance
     game, instance = game_factory(**params)
+    print(f"theta param: {instance._theta}")
     print(f"Minimum gap of game: {instance.min_gap()}")
 
     # setup strategy
@@ -298,6 +300,7 @@ def main():
     parser.add_argument('--lb_return', type=bool, default=False)
     parser.add_argument('--fast_ratio', type=bool, default=False)
     parser.add_argument('--lower_bound_gaps', type=bool, default=False)
+    parser.add_argument('--opt2', type=bool, default=False)
 
     # parse arguments
     args = vars(parser.parse_args())

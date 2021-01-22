@@ -295,9 +295,10 @@ class IDS(Strategy):
 
 class AsymptoticIDS(IDS):
 
-    def __init__(self, game, estimator, fast_ratio=False, lower_bound_gap=False):
+    def __init__(self, game, estimator, fast_ratio=False, lower_bound_gap=False, opt2=False):
         self.lower_bound_gap = lower_bound_gap
         self.mms = 1.
+        self.opt2 = opt2
         super().__init__(game, estimator, infogain=None, deterministic=False, fast_ratio=fast_ratio)
 
     def _info_game(self, indices, winner, nu, beta, V_norm):
@@ -318,12 +319,16 @@ class AsymptoticIDS(IDS):
         # in the case when the estimates are inaccurate. Also this parts guarantees the worst-case bounds.
 
         # Option 1, from the paper:
-        I_optimistic = np.sqrt(lls.beta()*lls.var(X))
+        # I_optimistic = np.sqrt(lls.beta()*lls.var(X))
 
         # Option 2, focus on UCB action in finite time regime:
         # This one improves performance in finite time, but pushes the regime switch, it seems
-        # I_optimistic = np.zeros(len(indices))
-        # I_optimistic[iucb] = np.sqrt(lls.beta()*lls.var(X[iucb]))
+        if self.opt2:
+            I_optimistic = np.zeros(len(indices))
+            I_optimistic[iucb] = np.sqrt(lls.beta()*lls.var(X[iucb]))
+        else:
+            I_optimistic = np.sqrt(lls.beta()*lls.var(X))
+
 
         I = q @ (np.abs((nu - lls.theta) @ X.T) + I_optimistic)**2
         return I
@@ -362,7 +367,7 @@ class AsymptoticIDS(IDS):
         indices = self._game.get_indices()
         #we may want to try other values for beta_t
         _t = max(2, self._t)
-        beta_t = self._estimator.lls.beta(1/(_t * np.log(_t)))  # adding +1 to avoid numerical issues at initialization
+        beta_t = self._estimator.lls.beta(1/(_t * np.log(_t)))
 
         # only re-compute quantities when the estimator changes
         if self._update_estimator:
@@ -405,4 +410,7 @@ class AsymptoticIDS(IDS):
             return winner
 
     def id(self):
-        return "asymptotic_ids"
+        if self.opt2:
+            return "asymptotic_ids++"
+        else:
+            return "asymptotic_ids"
