@@ -4,7 +4,7 @@ from scipy.linalg import cho_solve, cho_factor
 
 from pm.utils import difference_matrix, psd_norm_squared
 import cvxpy as cp
-
+import logging
 
 def full(indices, game, estimator):
     """
@@ -295,10 +295,11 @@ class IDS(Strategy):
 
 class AsymptoticIDS(IDS):
 
-    def __init__(self, game, estimator, fast_ratio=False, lower_bound_gap=False, opt2=False):
+    def __init__(self, game, estimator, fast_ratio=False, lower_bound_gap=False, opt2=False, alpha=1.):
         self.lower_bound_gap = lower_bound_gap
         self.mms = 1.
         self.opt2 = opt2
+        self.alpha = alpha
         super().__init__(game, estimator, infogain=None, deterministic=False, fast_ratio=fast_ratio)
 
     def _info_game(self, indices, winner, nu, beta, V_norm):
@@ -330,7 +331,7 @@ class AsymptoticIDS(IDS):
             I_optimistic = np.sqrt(lls.beta()*lls.var(X))
 
 
-        I = q @ (np.abs((nu - lls.theta) @ X.T) + I_optimistic)**2
+        I = q @ (np.abs((nu - lls.theta) @ X.T) + self.alpha*I_optimistic)**2
         return I
 
     def compute_nu(self, indices):
@@ -389,7 +390,7 @@ class AsymptoticIDS(IDS):
 
         # check exploration/exploitation condition
         if self.ms < beta_t:
-            # print(self.ms, beta_t, self._t, np.log(_t))
+            logging.debug(f"m_s={self.ms:0.3f}, beta_t={beta_t:0.3f}, t={self._t}, log(t)={np.log(_t):0.3f}")
             self._update_estimator = True  # exploration => collect data
 
             gaps = self._estimator.gap_upper(indices)
@@ -400,12 +401,12 @@ class AsymptoticIDS(IDS):
                 gaps += np.max(1/np.sqrt(self._estimator.lls.s) - delta_s, 0)
 
             if delta_s < 1/np.sqrt(self._estimator.lls.s):
-                print("minimum gap too small?")
+                logging.warning("minimum gap too small?")
 
             infogain = self._info_game(indices, winner, nu, beta_t, V_norm)
             return self._ids_sample(indices, gaps, infogain)
         else:
-            print("exploit")
+            logging.debug(f"Exploitation round: {self._t}")
             self._update_estimator = False
             return winner
 
