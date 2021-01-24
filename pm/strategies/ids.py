@@ -295,19 +295,22 @@ class IDS(Strategy):
 
 class AsymptoticIDS(IDS):
 
-    def __init__(self, game, estimator, fast_ratio=False, lower_bound_gap=False, opt2=False, alpha=1.):
+    def __init__(self, game, estimator, fast_ratio=False, lower_bound_gap=False, opt2=False, alpha=1., ucb_switch=False):
         self.lower_bound_gap = lower_bound_gap
         self.mms = 1.
         self.opt2 = opt2
         self.alpha = alpha
+        self.ucb_switch = ucb_switch
         super().__init__(game, estimator, infogain=None, deterministic=False, fast_ratio=fast_ratio)
 
-    def _info_game(self, indices, winner, nu, beta, V_norm):
+    def _info_game(self, indices, winner, nu, beta, V_norm, alpha=None):
         # compute mixing weights
         eta = 1. / np.sqrt(self.mms)
         q = np.exp(- eta * V_norm)
         q[winner] = 0.
         iucb = np.argmax(self._estimator.ucb(indices))
+        if alpha is None:
+            alpha = self.alpha
 
         # compute info gain
         X = self._game.get_actions(indices)
@@ -330,7 +333,6 @@ class AsymptoticIDS(IDS):
         else:
             I_optimistic = np.sqrt(lls.beta()*lls.var(X))
 
-        alpha = self.alpha
         # if self._t > 100:
         #     alpha = 0
 
@@ -377,6 +379,7 @@ class AsymptoticIDS(IDS):
         if self._update_estimator:
             # compute winner
             means = self._estimator.lls.mean(self._game.get_actions(indices))
+            self._means = means
             self._winner = np.argmax(means)
 
             # compute alternatives and V_norm
@@ -389,10 +392,11 @@ class AsymptoticIDS(IDS):
             # maximum observed distance to closest parameter, used in learning rate
             self.mms = np.max([self.ms, self.mms])
 
-        winner, V_norm, nu = self._winner, self._V_norm, self._nu
+        winner, V_norm, nu, means = self._winner, self._V_norm, self._nu, self._means
 
         # check exploration/exploitation condition
         if self.ms < beta_t:
+            self._update_estimator = True  # exploration => collect data
 
             # alternative way to compute ms
             gaps = means[winner] - means
@@ -402,8 +406,19 @@ class AsymptoticIDS(IDS):
             x_2best = self._game.get_actions(second_best)
             alt_ms = gaps[second_best]**2/self._estimator.lls.var(x_best - x_2best)
 
+            if self.ucb_switch:
+                gap_2best = gaps[second_best]
+                ucb_score = self._estimator.ucb(indices)
+                ucb_i = np.argmax(ucb_score)
+                delta = ucb_score[ucb_i] - means[winner]
+                if delta > gap_2best:
+                    logging.debug(f"delta={delta}, Delta_min={gap_2best}")
+                    logging.debug("Choosing UCB action")
+                    return ucb_i
+                logging.debug("choosing IDS action")
+
+
             logging.debug(f"m_s={self.ms:0.3f}, m_s_alt={alt_ms:0.3f}, beta_t={beta_t:0.3f}, t={self._t}, log(t)={np.log(_t):0.3f}")
-            self._update_estimator = True  # exploration => collect data
 
             gaps = self._estimator.gap_upper(indices)
             delta_s = gaps[winner]
@@ -415,7 +430,10 @@ class AsymptoticIDS(IDS):
             if delta_s < 1/np.sqrt(self._estimator.lls.s):
                 logging.warning("minimum gap too small?")
 
-            infogain = self._info_game(indices, winner, nu, beta_t, V_norm)
+            alpha = None
+            if self.ucb_switch:
+                alpha = 0.
+            infogain = self._info_game(indices, winner, nu, beta_t, V_norm, alpha=alpha)
             return self._ids_sample(indices, gaps, infogain)
         else:
             logging.debug(f"Exploitation round: {self._t}")

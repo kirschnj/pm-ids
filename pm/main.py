@@ -4,6 +4,8 @@ import os
 import json
 import uuid
 import shutil
+from hashlib import md5
+
 
 from pm import aggregate
 from pm.estimator import RegularizedLeastSquares, RegretEstimator
@@ -62,7 +64,7 @@ def counter_example(**params):
     game factory for the counter-example in the End of Optimism
     """
     # alpha = 0.25 such that 8\alpha\epsilon =2\epsilon as in Figure 1
-    eps = 0.01
+    eps = params.get('eoo_eps', 0.01)
     alpha = 1
     X = np.array([[1.,0.],[1-eps, 8*alpha*eps],[0.,1.]])
 
@@ -171,13 +173,14 @@ def asymptotic_ids(game_, **params):
     fast_ratio = params.get('fast_ratio', False)
     lower_bound_gap = params.get('lower_bound_gap', False)
     opt2 = params.get('opt2', False)
+    ucb_switch = params.get('ucb_switch', False)
     alpha = params.get('alpha', 1.0)
 
     if delta is not None:
         logging.warning("Setting delta has no effect for asymptotic_ids")
     # anytime estimator
     estimator = RegretEstimator(game=game_, lls=lls, delta=None, truncate=True, ucb_estimates=False)
-    strategy = AsymptoticIDS(game_, estimator=estimator, fast_ratio=fast_ratio, lower_bound_gap=lower_bound_gap, opt2=opt2, alpha=alpha)
+    strategy = AsymptoticIDS(game_, estimator=estimator, fast_ratio=fast_ratio, lower_bound_gap=lower_bound_gap, opt2=opt2, alpha=alpha, ucb_switch=ucb_switch)
     return strategy
 
 def solid(game_, **params):
@@ -222,43 +225,55 @@ def run(game_factory, strategy_factory, **params):
     # other parameters
     n = params.get('n')
     # lb_return = params.get('lb_return')
+    outdir = params.pop('outdir')
+    create_only = params.pop('create_only', False)
 
-    outdir = params.get('outdir')
-    if not os.path.exists(outdir):
-        if query_yes_no(f"The target directory {outdir} does not exist. Do you want to create it?"):
-            os.makedirs(outdir)
-        else:
-            logging.warning("Nothing written. Exiting.")
-            exit()
+    # create a hash of the parameter configuration
+    store_params = {k :v for k,v in sorted(params.items(), key=lambda i: i[0]) if v is not None}
+    hash = md5(json.dumps(store_params, sort_keys=True).encode()).hexdigest()
 
-    outdir = os.path.join(outdir, f"{game.id()}-{n}", instance.id(), strategy.id())
-
-    if os.path.exists(os.path.join(outdir, 'params.json')) and params['overwrite']:
-        shutil.rmtree(outdir)
-
-    del params['overwrite']
+    # outdir: game_name-{n}/strategy_name-{hash}
+    outdir = os.path.join(outdir, f"{str(game)}-{n}", f"{str(strategy)}-{hash}")
 
     # setup output directory
     os.makedirs(outdir, exist_ok=True)
     if not os.path.exists(os.path.join(outdir, 'params.json')):
         # save params
         with open(os.path.join(outdir, 'params.json'), 'w') as outfile:
-            json.dump(params, outfile)
-        json.dumps(params)
+            json.dump(store_params, outfile, indent=2)
 
-    else:
-        # check if directory has same parameters
-        with open(os.path.join(outdir, 'params.json'), 'r') as file:
-            prev_params = json.load(file)
-            if not prev_params == params:
-                if not query_yes_no(
-                        f"WARNING: Input parameters changed. The previous parameters were:\n{prev_params}\n\n The current parameters are:\n{params}\n\nDo you want to continue?",
-                        default="no"):
-                    logging.warning("Nothing written. Exiting.")
-                    exit()
+    if create_only:
+        exit()
+
+    # if not os.path.exists(outdir):
+    #     if query_yes_no(f"The target directory {outdir} does not exist. Do you want to create it?"):
+    #         os.makedirs(outdir)
+    #     else:
+    #         logging.warning("Nothing written. Exiting.")
+    #         exit()
+
+    # outdir = os.path.join(outdir, f"{game.id()}-{n}", instance.id(), strategy.id())
+
+    # setup output directory
+    # os.makedirs(outdir, exist_ok=True)
+    # if not os.path.exists(os.path.join(outdir, 'params.json')):
+    #     # save params
+    #     with open(os.path.join(outdir, 'params.json'), 'w') as outfile:
+    #         json.dump(params, outfile)
+    #     json.dumps(params)
+    #
+    # else:
+    #     # check if directory has same parameters
+    #     with open(os.path.join(outdir, 'params.json'), 'r') as file:
+    #         prev_params = json.load(file)
+    #         if not prev_params == params:
+    #             if not query_yes_no(
+    #                     f"WARNING: Input parameters changed. The previous parameters were:\n{prev_params}\n\n The current parameters are:\n{params}\n\nDo you want to continue?",
+    #                     default="no"):
+    #                 logging.warning("Nothing written. Exiting.")
+    #                 exit()
 
     outfile = os.path.join(outdir, f"run-{timestamp()}-{uuid.uuid4().hex}.csv")
-
 
     data = np.empty(shape=(n), dtype=([('regret', 'f8'), ('cum_regret', 'f8'), ('action', 'i8')]))  # store data for the csv file
     cumulative_regret = 0
@@ -306,15 +321,17 @@ def main():
     parser.add_argument('--dids', action='store_true')
     parser.add_argument('--delta', type=float, default=None)
     parser.add_argument('--laser-indirect', action='store_true', default=False)
-    parser.add_argument('--overwrite', action='store_true')
     parser.add_argument('--aggr', choices=[f.__name__ for f in aggregate.AGGREGATORS])
     parser.add_argument('--lb_return', type=bool, default=False)
     parser.add_argument('--fast_ratio', type=bool, default=False)
     parser.add_argument('--lower_bound_gaps', type=bool, default=False)
     parser.add_argument('--opt2', type=bool, default=False)
     parser.add_argument('--alpha', type=float, default=1.)
+    parser.add_argument('--eoo_eps', type=float, default=0.01)
+    parser.add_argument('--ucb_switch', help="ucb-ids switch version", action="store_true")
     parser.add_argument('-v', '--verbose', help="show info output", action="store_true")
     parser.add_argument('-vv', '--verbose2', help="show debug output", action="store_true")
+    parser.add_argument('--create_only', help="only create output directory and exit", action="store_true")
 
     # parse arguments
     args = vars(parser.parse_args())

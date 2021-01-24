@@ -4,7 +4,7 @@ from pm.game import Game
 
 class Bandit(Game):
 
-    def __init__(self, X, id=""):
+    def __init__(self, X, id=None):
         self._X = X
         self._id = id
         self._d = X.shape[1]
@@ -31,8 +31,10 @@ class Bandit(Game):
 
         return C
 
-    def id(self):
-        return self._id
+    def __str__(self):
+        if self._id is not None:
+            return self._id
+        return type(self).__name__
 
 
 # TODO : another experiment idea

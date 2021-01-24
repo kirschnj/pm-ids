@@ -9,7 +9,7 @@ def timestamp():
     compute timestamp used for filenames
     """
     now = datetime.now()
-    return now.strftime("%Y%m%d-%H%M%S.%f")
+    return now.strftime("%Y%m%d.%H%M%S.%f")
 
 
 def query_yes_no(question, default="yes"):
