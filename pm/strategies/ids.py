@@ -330,8 +330,11 @@ class AsymptoticIDS(IDS):
         else:
             I_optimistic = np.sqrt(lls.beta()*lls.var(X))
 
+        alpha = self.alpha
+        # if self._t > 100:
+        #     alpha = 0
 
-        I = q @ (np.abs((nu - lls.theta) @ X.T) + self.alpha*I_optimistic)**2
+        I = q @ (np.abs((nu - lls.theta) @ X.T) + alpha*I_optimistic)**2
         return I
 
     def compute_nu(self, indices):
@@ -390,7 +393,16 @@ class AsymptoticIDS(IDS):
 
         # check exploration/exploitation condition
         if self.ms < beta_t:
-            logging.debug(f"m_s={self.ms:0.3f}, beta_t={beta_t:0.3f}, t={self._t}, log(t)={np.log(_t):0.3f}")
+
+            # alternative way to compute ms
+            gaps = means[winner] - means
+            gaps[winner] = np.inf
+            second_best = np.argmin(gaps)
+            x_best = self._game.get_actions(winner)
+            x_2best = self._game.get_actions(second_best)
+            alt_ms = gaps[second_best]**2/self._estimator.lls.var(x_best - x_2best)
+
+            logging.debug(f"m_s={self.ms:0.3f}, m_s_alt={alt_ms:0.3f}, beta_t={beta_t:0.3f}, t={self._t}, log(t)={np.log(_t):0.3f}")
             self._update_estimator = True  # exploration => collect data
 
             gaps = self._estimator.gap_upper(indices)
@@ -412,6 +424,6 @@ class AsymptoticIDS(IDS):
 
     def id(self):
         if self.opt2:
-            return "asymptotic_ids++"
+            return f"asymptotic_ids-{self.alpha}++"
         else:
-            return "asymptotic_ids"
+            return f"asymptotic_ids-{self.alpha}"
