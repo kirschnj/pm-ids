@@ -15,5 +15,5 @@ class Strategy:
     def get_next_action(self):
         raise NotImplemented
 
-    def id(self):
-        raise NotImplemented
+    def __str__(self):
+        return type(self).__name__

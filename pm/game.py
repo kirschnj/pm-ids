@@ -48,16 +48,13 @@ class Game:
         """
         raise NotImplemented
 
-    def id(self):
-        """
-        identifier used in the directory structure to store the results
-        """
-        raise NotImplemented
+    def __str__(self):
+        return type(self).__name__
 
 
 class GameInstance:
 
-    def __init__(self, game, theta, noise, id=""):
+    def __init__(self, game, theta, noise, id=None):
         """
 
         :param game:
@@ -107,8 +104,7 @@ class GameInstance:
         y = self.get_observation(indices)
         return y + self._noise(y.shape)
 
-    def id(self):
-        """
-        identifier used in the directory structure to store the results
-        """
-        return self._id
+    def __str__(self):
+        if self._id is not None:
+            return self._id
+        return type(self).__name__
