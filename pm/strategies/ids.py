@@ -438,9 +438,3 @@ class AsymptoticIDS(IDS):
             print("exploit")
             self._update_estimator = False
             return winner
-
-    def id(self):
-        if self.opt2:
-            return "asymptotic_ids++"
-        else:
-            return "asymptotic_ids"

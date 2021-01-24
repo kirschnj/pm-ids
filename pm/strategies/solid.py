@@ -212,9 +212,3 @@ class Solid(Strategy):
         super().add_observations(indices, y)
 
         self._t += 1  # increase step counter each time we get the data
-
-    def id(self):
-        if self.reset:
-            return "Solid"
-        else:
-            return "Solid++"

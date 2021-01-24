@@ -234,34 +234,6 @@ def run(game_factory, strategy_factory, **params):
     if create_only:
         exit()
 
-    # if not os.path.exists(outdir):
-    #     if query_yes_no(f"The target directory {outdir} does not exist. Do you want to create it?"):
-    #         os.makedirs(outdir)
-    #     else:
-    #         logging.warning("Nothing written. Exiting.")
-    #         exit()
-
-    # outdir = os.path.join(outdir, f"{game.id()}-{n}", instance.id(), strategy.id())
-
-    # setup output directory
-    # os.makedirs(outdir, exist_ok=True)
-    # if not os.path.exists(os.path.join(outdir, 'params.json')):
-    #     # save params
-    #     with open(os.path.join(outdir, 'params.json'), 'w') as outfile:
-    #         json.dump(params, outfile)
-    #     json.dumps(params)
-    #
-    # else:
-    #     # check if directory has same parameters
-    #     with open(os.path.join(outdir, 'params.json'), 'r') as file:
-    #         prev_params = json.load(file)
-    #         if not prev_params == params:
-    #             if not query_yes_no(
-    #                     f"WARNING: Input parameters changed. The previous parameters were:\n{prev_params}\n\n The current parameters are:\n{params}\n\nDo you want to continue?",
-    #                     default="no"):
-    #                 logging.warning("Nothing written. Exiting.")
-    #                 exit()
-
     outfile = os.path.join(outdir, f"run-{timestamp()}-{uuid.uuid4().hex}.csv")
 
     data = np.empty(shape=(n), dtype=([('regret', 'f8'), ('cum_regret', 'f8'), ('action', 'i8')]))  # store data for the csv file
