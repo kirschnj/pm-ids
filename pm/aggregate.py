@@ -2,6 +2,7 @@ import argparse
 import glob
 import os
 import numpy as np
+import pandas as pd
 
 def regret(data):
     """
@@ -49,9 +50,13 @@ def aggregate(path, aggregator):
     data = np.empty(shape=(*csv_data_0.shape, len(csv_files)))
 
     # go through all csv files and store data
+    print(f"Reading {len(csv_files)} files ...")
     for i, file in enumerate(csv_files):
-        data[:, :, i] = np.loadtxt(file)
+        # data[:, :, i] = np.loadtxt(file)
+        # pandas as A LOT faster
+        data[:, :, i] = pd.read_csv(file, delimiter=" ", header=None).values
 
+    print("Files loaded. Aggregating now...")
     aggr_data = aggregator(data)
 
     # save in csv file
