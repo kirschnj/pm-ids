@@ -63,7 +63,8 @@ def counter_example(**params):
     """
     # alpha = 0.25 such that 8\alpha\epsilon =2\epsilon as in Figure 1
     eps = 0.01
-    X = np.array([[1.,0.],[1-eps,2*eps],[0.,1.]])
+    alpha = 1
+    X = np.array([[1.,0.],[1-eps, 8*alpha*eps],[0.,1.]])
 
     game = Bandit(X, id=f"counter_example_{eps}")
     instance = GameInstance(game, theta=np.array([1.,0.]), noise=noise_normal)
@@ -266,6 +267,9 @@ def run(game_factory, strategy_factory, **params):
     for t in range(n):
         # call strategy
         x = [strategy.get_next_action()]
+        #
+        # if x[0] != 0:
+        #     print(f"Arm: {x}")
 
         # compute reward and regret
         reward = instance.get_reward(x)
