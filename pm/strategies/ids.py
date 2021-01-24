@@ -388,6 +388,7 @@ class AsymptoticIDS(IDS):
         winner, V_norm, nu = self._winner, self._V_norm, self._nu
 
         # check exploration/exploitation condition
+        print(self.ms)
         if self.ms < beta_t:
             # print(self.ms, beta_t, self._t, np.log(_t))
             self._update_estimator = True  # exploration => collect data

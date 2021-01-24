@@ -29,6 +29,33 @@ class Solid(Strategy):
         #for multi context bandit we need a matrix (nb_context x nb_actions)
         self._t = 1
 
+    def compute_nu(self, indices):
+        """
+        Compute the alternative parameters and Vnorm for each cell
+        """
+        d = self._game.d
+        X = self._game.get_actions(indices)
+        theta = self._estimator.lls.theta
+        V = self._estimator.lls.V
+        nu = np.zeros((len(indices), d))
+        C = difference_matrix(X)
+        # for each action, solve the quadratic program to find the alternative
+        for i in indices:
+            x = cp.Variable(d)
+            q = -2 * (V @ theta)
+            G = -C[i, :, :]
+
+            prob = cp.Problem(cp.Minimize(cp.quad_form(x, V) + q.T @ x), [G @ x <= 0])
+            prob.solve()
+
+            nu[i:] = x.value
+
+        # check corner cases in the bandit case : can the projected nu have a very large norm ? => regularization ?
+        # normalize as per our unit ball hypothesis => creates bugs when the projection on the cone is too close to origin. Also does it make sense ?
+        # nu /= np.linalg.norm(nu, axis=1)[:, None]
+        V_norm = psd_norm_squared(nu - theta, V)
+        return nu, V_norm
+
 
 
     def compute_q(self):
@@ -106,11 +133,15 @@ class Solid(Strategy):
         sq_norms = psd_norm_squared(X - X_win, V_matrix)
         sq_norms[self._winner] = 1 ## to avoid numerical problems, returns a null ratio
         sq_gaps = (self._means - self._means[self._winner])**2
-        sq_gaps[self._winner] = 10000
 
+        print('sq_norms'+str(sq_norms))
+        print('sq_gaps'+str(sq_gaps))
 
+        ratios = sq_gaps / sq_norms
 
-        return  np.divide(sq_gaps,sq_norms)
+        print(ratios)
+
+        return  ratios
 
 
 
@@ -118,8 +149,8 @@ class Solid(Strategy):
     def get_next_action(self):
         indices = self._game.get_indices()
         #same as in ids, but article takes delta=1/n and uses n instead of logdet(V_t)
-        beta_t = self._estimator.lls.beta(1/(self._t * np.log(self._t + 2)))  # adding +1 to avoid numerical issues at initialization
-
+        _t = max(2, self._t)
+        beta_t = self._estimator.lls.beta(1/(_t * np.log(_t)))
 
         # theta_min, min_V_norm = self.compute_alt(indices, self._estimator.lls.V)
         #
@@ -128,9 +159,20 @@ class Solid(Strategy):
         # compute the minimum "information ratio" as in Eq 80 of Ap K
         inf_ratios = self.get_info_ratios(self._estimator.lls.V)
         # print(inf_ratios)
+
+        #temporary:
+        nu, V_norm = self.compute_nu(indices)
+
+        # compute minimum V-norm without winner
+        V_norm[self._winner] = np.Infinity
+        ms = np.min(V_norm)
+        print('ms:'+str(ms))
+
+
+
         self._min_ratio = np.min(inf_ratios)
 
-        # print(self._min_ratio)
+        print('min_ratio'+str(self._min_ratio)) # should be equal to self.ms in asymp-ids
         # print(beta_t)
 
         if self._min_ratio > beta_t:
