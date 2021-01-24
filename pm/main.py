@@ -321,7 +321,7 @@ def main():
     parser.add_argument('-v', '--verbose', help="show info output", action="store_true")
     parser.add_argument('-vv', '--verbose2', help="show debug output", action="store_true")
     parser.add_argument('--create_only', help="only create output directory and exit", action="store_true")
-
+    parser.add_argument('--reset', type=bool, default=True)
     # parse arguments
     args = vars(parser.parse_args())
 
