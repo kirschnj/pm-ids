@@ -1,10 +1,11 @@
-from pm.strategy import Strategy
+import logging
 import numpy as np
+import cvxpy as cp
 from scipy.linalg import cho_solve, cho_factor
 
 from pm.utils import difference_matrix, psd_norm_squared
-import cvxpy as cp
-import logging
+from pm.strategy import Strategy
+
 
 def full(indices, game, estimator):
     """
@@ -333,10 +334,7 @@ class AsymptoticIDS(IDS):
         else:
             I_optimistic = np.sqrt(lls.beta()*lls.var(X))
 
-        # if self._t > 100:
-        #     alpha = 0
-
-        I = q @ (np.abs((nu - lls.theta) @ X.T) + alpha*I_optimistic)**2
+        I = q @ (np.abs((nu - lls.theta) @ X.T) + I_optimistic)**2
         return I
 
     def compute_nu(self, indices):
@@ -395,6 +393,7 @@ class AsymptoticIDS(IDS):
         winner, V_norm, nu, means = self._winner, self._V_norm, self._nu, self._means
 
         # check exploration/exploitation condition
+        print(self.ms)
         if self.ms < beta_t:
             self._update_estimator = True  # exploration => collect data
 
@@ -428,7 +427,7 @@ class AsymptoticIDS(IDS):
                 gaps += np.max(1/np.sqrt(self._estimator.lls.s) - delta_s, 0)
 
             if delta_s < 1/np.sqrt(self._estimator.lls.s):
-                logging.warning("minimum gap too small?")
+                print("minimum gap too small?")
 
             alpha = None
             if self.ucb_switch:
@@ -436,12 +435,12 @@ class AsymptoticIDS(IDS):
             infogain = self._info_game(indices, winner, nu, beta_t, V_norm, alpha=alpha)
             return self._ids_sample(indices, gaps, infogain)
         else:
-            logging.debug(f"Exploitation round: {self._t}")
+            print("exploit")
             self._update_estimator = False
             return winner
 
     def id(self):
         if self.opt2:
-            return f"asymptotic_ids-{self.alpha}++"
+            return "asymptotic_ids++"
         else:
-            return f"asymptotic_ids-{self.alpha}"
+            return "asymptotic_ids"

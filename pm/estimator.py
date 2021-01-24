@@ -64,7 +64,7 @@ class RegularizedLeastSquares:
         :return:
         """
         if delta is None:
-            _s = max(self.s, 2)
+            _s = max(self.s, 2.)
             delta = 1/(_s*np.log(_s))
         logdet = 2 * np.sum(np.log(np.diag(self._cholesky[0])))
         beta = (np.sqrt(logdet + 2*np.log(1/delta)) + 1)**2

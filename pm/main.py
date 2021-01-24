@@ -185,21 +185,10 @@ def asymptotic_ids(game_, **params):
 
 def solid(game_, **params):
     lls = RegularizedLeastSquares(d=game_.get_d())
-    # lambda_1=0., z_0=30, alpha_l=0.1, alpha_w = 0.5, lambda_max=10
-    # if params.get('lambda_1') is not None:
-    #     lambda_1 = params.get('lambda_1')
-    #
-    # if params.get('z_0') is not None:
-    #     z_0 = params.get('z_0')
-    # if params.get('alpha_l') is not None:
-    #     alpha_l = params.get('alpha_l')
-    # if params.get('alpha_w') is not None:
-    #     alpha_l = params.get('alpha_w')
-    # if params.get('lambda_max') is not None:
-    #     lambda_1 = params.get('lambda_max')
 
+    reset = params.get('reset', True)
     estimator = RegretEstimator(game=game_, lls=lls, delta=None)
-    strategy = Solid(game_, estimator=estimator) #default values already set
+    strategy = Solid(game_, estimator=estimator, reset=reset) #default values already set
     return strategy
 
 
