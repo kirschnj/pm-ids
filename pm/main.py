@@ -15,6 +15,9 @@ from pm.strategies.ucb import UCB
 from pm.strategies.solid import Solid
 from pm.utils import query_yes_no, timestamp, fixed_seed, lower_bound
 
+import logging
+
+
 
 def noise_normal(size):
     """
@@ -41,11 +44,15 @@ def simple_bandit(**params):
     """
     game factory for simple bandit game
     """
-    with fixed_seed(params.get('seed', None)):
+    seed = params.get('seed')
+    with fixed_seed(seed):
         X = np.random.normal(size=12).reshape(6, 2)
         X = X / np.linalg.norm(X, axis=1)[:, None]
 
-    game = Bandit(X, id="simple_bandit")
+    _id = "simple_bandit"
+    if seed is not None:
+        _id += f"_{seed}"
+    game = Bandit(X, id=_id)
     instance = GameInstance(game, theta=np.array([1., 0.]), noise=noise_normal)
 
     return game, instance
@@ -56,9 +63,10 @@ def counter_example(**params):
     """
     # alpha = 0.25 such that 8\alpha\epsilon =2\epsilon as in Figure 1
     eps = 0.01
-    X = np.array([[1.,0.],[1-eps,2*eps],[0.,1.]])
+    alpha = 1
+    X = np.array([[1.,0.],[1-eps, 8*alpha*eps],[0.,1.]])
 
-    game = Bandit(X, id="counter_example")
+    game = Bandit(X, id=f"counter_example_{eps}")
     instance = GameInstance(game, theta=np.array([1.,0.]), noise=noise_normal)
 
     return game, instance
@@ -163,31 +171,21 @@ def asymptotic_ids(game_, **params):
     fast_ratio = params.get('fast_ratio', False)
     lower_bound_gap = params.get('lower_bound_gap', False)
     opt2 = params.get('opt2', False)
+    alpha = params.get('alpha', 1.0)
 
     if delta is not None:
-        print("WARNING: Setting delta has no effect for asymptotic_ids")
+        logging.warning("Setting delta has no effect for asymptotic_ids")
     # anytime estimator
     estimator = RegretEstimator(game=game_, lls=lls, delta=None, truncate=True, ucb_estimates=False)
-    strategy = AsymptoticIDS(game_, estimator=estimator, fast_ratio=fast_ratio, lower_bound_gap=lower_bound_gap, opt2=opt2)
+    strategy = AsymptoticIDS(game_, estimator=estimator, fast_ratio=fast_ratio, lower_bound_gap=lower_bound_gap, opt2=opt2, alpha=alpha)
     return strategy
 
 def solid(game_, **params):
     lls = RegularizedLeastSquares(d=game_.get_d())
-    # lambda_1=0., z_0=30, alpha_l=0.1, alpha_w = 0.5, lambda_max=10
-    # if params.get('lambda_1') is not None:
-    #     lambda_1 = params.get('lambda_1')
-    #
-    # if params.get('z_0') is not None:
-    #     z_0 = params.get('z_0')
-    # if params.get('alpha_l') is not None:
-    #     alpha_l = params.get('alpha_l')
-    # if params.get('alpha_w') is not None:
-    #     alpha_l = params.get('alpha_w')
-    # if params.get('lambda_max') is not None:
-    #     lambda_1 = params.get('lambda_max')
 
+    reset = params.get('reset', True)
     estimator = RegretEstimator(game=game_, lls=lls, delta=None)
-    strategy = Solid(game_, estimator=estimator) #default values already set
+    strategy = Solid(game_, estimator=estimator, reset=reset) #default values already set
     return strategy
 
 
@@ -205,8 +203,7 @@ def run(game_factory, strategy_factory, **params):
     """
     # setup game and instance
     game, instance = game_factory(**params)
-    print(f"theta param: {instance._theta}")
-    print(f"Minimum gap of game: {instance.min_gap()}")
+    logging.info(f"Minimum gap: {instance.min_gap():0.3f}")
 
     # setup strategy
     strategy = strategy_factory(game, **params)
@@ -220,7 +217,7 @@ def run(game_factory, strategy_factory, **params):
         if query_yes_no(f"The target directory {outdir} does not exist. Do you want to create it?"):
             os.makedirs(outdir)
         else:
-            print("Nothing written. Exiting.")
+            logging.warning("Nothing written. Exiting.")
             exit()
 
     outdir = os.path.join(outdir, f"{game.id()}-{n}", instance.id(), strategy.id())
@@ -246,7 +243,7 @@ def run(game_factory, strategy_factory, **params):
                 if not query_yes_no(
                         f"WARNING: Input parameters changed. The previous parameters were:\n{prev_params}\n\n The current parameters are:\n{params}\n\nDo you want to continue?",
                         default="no"):
-                    print("Nothing written. Exiting.")
+                    logging.warning("Nothing written. Exiting.")
                     exit()
 
     outfile = os.path.join(outdir, f"run-{timestamp()}-{uuid.uuid4().hex}.csv")
@@ -259,6 +256,9 @@ def run(game_factory, strategy_factory, **params):
     for t in range(n):
         # call strategy
         x = [strategy.get_next_action()]
+        #
+        # if x[0] != 0:
+        #     print(f"Arm: {x}")
 
         # compute reward and regret
         reward = instance.get_reward(x)
@@ -301,30 +301,36 @@ def main():
     parser.add_argument('--fast_ratio', type=bool, default=False)
     parser.add_argument('--lower_bound_gaps', type=bool, default=False)
     parser.add_argument('--opt2', type=bool, default=False)
+    parser.add_argument('--alpha', type=float, default=1.)
+    parser.add_argument('-v', '--verbose', help="show info output", action="store_true")
+    parser.add_argument('-vv', '--verbose2', help="show debug output", action="store_true")
 
     # parse arguments
     args = vars(parser.parse_args())
+
+    # set up logging
+    logging.basicConfig(format='%(levelname)s: %(message)s')
+    if args.pop('verbose'):
+        logging.getLogger().setLevel(level=logging.INFO)
+    if args.pop('verbose2'):
+        logging.getLogger().setLevel(level=logging.DEBUG)
 
     # create game and strategy factories
     game_factory = games[args['game']]
     strategy_factory = strategies[args['strategy']]
 
     # repetition number
-    rep = args['rep']
-    del args['rep']
+    rep = args.pop('rep')
 
     # aggregation flag
-    aggr = args['aggr']
-    del args['aggr']
-
+    aggr = args.pop('aggr')
 
     lb_return = args['lb_return']
-
 
     # run game, possibly multiple times
     for i in range(rep):
         if rep > 1:
-            print(f"Running iteration {i}.")
+            logging.info(f"Running iteration {i}.")
         path = run(game_factory, strategy_factory, **args)
 
     if lb_return:
