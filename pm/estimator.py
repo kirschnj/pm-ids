@@ -6,11 +6,12 @@ from pm.utils import difference_matrix
 
 class RegularizedLeastSquares:
 
-    def __init__(self, d):
+    def __init__(self, d, beta_logdet=True):
         self._d = d
         self._V = np.eye(self._d)
         self._XY = np.zeros(self._d)
         self._s = 1
+        self.beta_logdet = beta_logdet
         self._update_cache()
 
     def _update_cache(self):
@@ -63,11 +64,14 @@ class RegularizedLeastSquares:
         :param delta:
         :return:
         """
+        _s = max(self.s, 2)
         if delta is None:
-            _s = max(self.s, 2.)
             delta = 1/(_s*np.log(_s))
-        logdet = 2 * np.sum(np.log(np.diag(self._cholesky[0])))
-        beta = (np.sqrt(logdet + 2*np.log(1/delta)) + 1)**2
+        if self.beta_logdet:
+            logdet = 2 * np.sum(np.log(np.diag(self._cholesky[0])))
+            beta = (np.sqrt(logdet + 2*np.log(1/delta)) + 1)**2
+        else:
+            beta = 2*np.log(1/delta) + self._d * max(np.log(np.log(_s)), 1)
         return beta
 
     def get_cholesky_factor(self):
