@@ -59,6 +59,8 @@ def simple_bandit(**params):
 
     return game, instance
 
+
+
 def large_gaps(**params):
     """
     game factory for a simple_bandit game with fixed design and large gap
@@ -68,7 +70,7 @@ def large_gaps(**params):
     #     X = np.random.normal(size=12).reshape(6, 2)
     #     X = X / np.linalg.norm(X, axis=1)[:, None]
 
-    X = np.array([[0.97, 0.23], [0.05, -0.99], [-0.09, 0.99], [-0.8, 0.5]])
+    X = np.array([[0.97, 0.23], [0.09, -0.9], [-0.09, 0.9], [-0.8, 0.5]])
 
     _id = "large_gaps"
 
@@ -83,8 +85,8 @@ def counter_example(**params):
     game factory for the counter-example in the End of Optimism
     """
     # alpha = 0.25 such that 8\alpha\epsilon =2\epsilon as in Figure 1
-    eps = params.get('eoo_eps', 0.05)
-    alpha = 1.0
+    eps = params.get('eoo_eps', 0.01)
+    alpha = 0.1
     X = np.array([[1.,0.],[1-eps, 8*alpha*eps],[0.,1.]])
 
     game = Bandit(X, id=f"counter_example_{eps}")
