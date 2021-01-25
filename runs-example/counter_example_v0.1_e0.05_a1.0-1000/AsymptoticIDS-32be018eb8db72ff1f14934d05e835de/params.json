@@ -1,0 +1,19 @@
+{
+  "alpha": 1.0,
+  "beta_logdet": true,
+  "dids": false,
+  "eoo_alpha": 1.0,
+  "eoo_eps": 0.05,
+  "fast_ratio": false,
+  "game": "counter_example",
+  "ids_fast_info": false,
+  "laser_indirect": false,
+  "lb_return": false,
+  "lower_bound_gaps": false,
+  "n": 1000,
+  "noise_var": 0.1,
+  "opt2": true,
+  "solid_reset": false,
+  "strategy": "asymptotic_ids",
+  "ucb_switch": false
+}

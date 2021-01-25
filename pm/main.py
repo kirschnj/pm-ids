@@ -167,7 +167,8 @@ def ucb(game_, **params):
     strategy factory for UCB
     """
     delta = params.get('delta')
-    lls = RegularizedLeastSquares(d=game_.get_d())
+    beta_logdet = params.get('beta_logdet', False)
+    lls = RegularizedLeastSquares(d=game_.get_d(), beta_logdet=beta_logdet)
     estimator = RegretEstimator(game=game_, lls=lls, delta=delta, truncate=False)
     strategy = UCB(game_, estimator=estimator)
     return strategy
@@ -183,29 +184,32 @@ def ids(game_, **params):
     dids = params.get('dids')
     delta = params.get('delta')
 
-    lls = RegularizedLeastSquares(d=game_.get_d())
+    beta_logdet = params.get('beta_logdet', False)
+    lls = RegularizedLeastSquares(d=game_.get_d(), beta_logdet=beta_logdet)
     estimator = RegretEstimator(game=game_, lls=lls, delta=delta, truncate=False)
     strategy = IDS(game_, infogain=infogain, estimator=estimator, deterministic=dids)
     return strategy
 
 def asymptotic_ids(game_, **params):
-    lls = RegularizedLeastSquares(d=game_.get_d())
-    delta = params.get('delta')
+    beta_logdet = params.get('beta_logdet', False)
+    lls = RegularizedLeastSquares(d=game_.get_d(), beta_logdet=beta_logdet)
     fast_ratio = params.get('fast_ratio', False)
     lower_bound_gap = params.get('lower_bound_gap', False)
     opt2 = params.get('opt2', False)
     ucb_switch = params.get('ucb_switch', False)
+    fast_info = params.get('ids_fast_info', False)
     alpha = params.get('alpha', 1.0)
 
-    if delta is not None:
+    if params.get('delta') is not None:
         logging.warning("Setting delta has no effect for asymptotic_ids")
     # anytime estimator
     estimator = RegretEstimator(game=game_, lls=lls, delta=None, truncate=True, ucb_estimates=False)
-    strategy = AsymptoticIDS(game_, estimator=estimator, fast_ratio=fast_ratio, lower_bound_gap=lower_bound_gap, opt2=opt2, alpha=alpha, ucb_switch=ucb_switch)
+    strategy = AsymptoticIDS(game_, estimator=estimator, fast_ratio=fast_ratio, lower_bound_gap=lower_bound_gap, opt2=opt2, alpha=alpha, ucb_switch=ucb_switch, fast_info=fast_info)
     return strategy
 
 def solid(game_, **params):
-    lls = RegularizedLeastSquares(d=game_.get_d())
+    beta_logdet = params.get('beta_logdet', False)
+    lls = RegularizedLeastSquares(d=game_.get_d(), beta_logdet=beta_logdet)
 
     reset = params['solid_reset']
     logging.info(f"Using solid with reset={reset}")
@@ -308,6 +312,7 @@ def main():
     parser.add_argument('--aggr', choices=[f.__name__ for f in aggregate.AGGREGATORS])
     parser.add_argument('--lb_return', type=bool, default=False)
     parser.add_argument('--fast_ratio', type=bool, default=False)
+    parser.add_argument('--ids_fast_info', help="fast version of info gain", action="store_true")
     parser.add_argument('--lower_bound_gaps', type=bool, default=False)
     parser.add_argument('--opt2', type=bool, default=False)
     parser.add_argument('--alpha', type=float, default=1.)
@@ -316,6 +321,9 @@ def main():
     parser.add_argument('-v', '--verbose', help="show info output", action="store_true")
     parser.add_argument('-vv', '--verbose2', help="show debug output", action="store_true")
     parser.add_argument('--create_only', help="only create output directory and exit", action="store_true")
+
+    # parameter for lls
+    parser.add_argument('--beta_logdet', help="use log-det to compute beta. without this flag, beta=2log(1/delta) + d log log (n)", action="store_true")
 
     # parameters for solid
     parser.add_argument('--solid_reset', action="store_true")
