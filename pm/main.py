@@ -209,7 +209,7 @@ def solid(game_, **params):
     logging.info(f"Using solid with reset={reset}")
     estimator = RegretEstimator(game=game_, lls=lls, delta=None)
     strategy = Solid(game_, estimator=estimator, reset=reset) #default values already set
-    print('game vectors are '+str(game_._X))
+    # print('game vectors are '+str(game_._X))
     return strategy
 
 
