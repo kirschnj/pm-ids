@@ -111,7 +111,10 @@ class Solid(Strategy):
         self.w_t /= np.sum(self.w_t)
 
         #update lambda_t :
-        Vw = self.get_Vw(indices)
+        if self.reset==True:
+            Vw = self.get_Vw(indices)
+        else:
+            Vw = self.get_Vw(indices, eps=0.001)
         min_Vw_norm = self.get_info_ratios(Vw)
 
         g_t = min_Vw_norm + np.dot(self.w_t, np.sqrt(self._estimator.lls.beta(1/self.explo_rounds) * self._estimator.var(indices))) - 1/self.z_k
@@ -154,7 +157,7 @@ class Solid(Strategy):
 
         #same as in ids, but article takes delta=1/n and uses n instead of logdet(V_t)
         _t = max(2, self._t)
-        beta_t = self._estimator.lls.beta(1/(_t * np.log(_t)))
+        beta_t = self._estimator.lls.beta(1/_t ) #* np.log(_t)
 
         # theta_min, min_V_norm = self.compute_alt(indices, self._estimator.lls.V)
         #
@@ -192,13 +195,13 @@ class Solid(Strategy):
 
             if self.phase_length == self.p_k:
                 #update phase counters
-                print('increasing phase: '+str(self.phase_length))
+                # print('increasing phase: '+str(self.phase_length))
                 self.phase += 1
                 self.phase_length = 0
                 self.z_k *= np.exp(self.phase / (self.phase -1 ))
                 self.z_k = np.floor(self.z_k)
                 self.p_k = np.int(self.z_k * np.exp(self.phase)) #removed the 2* in exp
-                print('next phase is ' + str(self.p_k))
+                # print('next phase is ' + str(self.p_k))
                 # updates alphas
                 self.alpha_w , self.alpha_l = self.update_alphas()
                 #reset

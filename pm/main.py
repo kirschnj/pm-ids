@@ -59,13 +59,32 @@ def simple_bandit(**params):
 
     return game, instance
 
+def large_gaps(**params):
+    """
+    game factory for a simple_bandit game with fixed design and large gap
+    4 arms
+    """
+    # with fixed_seed(3):
+    #     X = np.random.normal(size=12).reshape(6, 2)
+    #     X = X / np.linalg.norm(X, axis=1)[:, None]
+
+    X = np.array([[0.97, 0.23], [0.05, -0.99], [-0.09, 0.99], [-0.8, 0.5]])
+
+    _id = "large_gaps"
+
+    game = Bandit(X, id=_id)
+    instance = GameInstance(game, theta=np.array([1., 0.]), noise=noise_normal)
+
+    return game, instance
+
+
 def counter_example(**params):
     """
     game factory for the counter-example in the End of Optimism
     """
     # alpha = 0.25 such that 8\alpha\epsilon =2\epsilon as in Figure 1
-    eps = params.get('eoo_eps', 0.01)
-    alpha = 1
+    eps = params.get('eoo_eps', 0.05)
+    alpha = 0.25
     X = np.array([[1.,0.],[1-eps, 8*alpha*eps],[0.,1.]])
 
     game = Bandit(X, id=f"counter_example_{eps}")
@@ -138,7 +157,7 @@ def laser(**params):
     return game, instance
 
 # list of available games
-GAMES = [simple_bandit, laser, counter_example]
+GAMES = [simple_bandit, large_gaps ,laser, counter_example]
 
 
 def ucb(game_, **params):
@@ -189,6 +208,7 @@ def solid(game_, **params):
     reset = params.get('reset', True)
     estimator = RegretEstimator(game=game_, lls=lls, delta=None)
     strategy = Solid(game_, estimator=estimator, reset=reset) #default values already set
+    print('game vectors are '+str(game_._X))
     return strategy
 
 
@@ -326,7 +346,7 @@ def main():
         n = args['n']
         game, instance = game_factory(**args)
         outdir = args['outdir']
-        outdir = os.path.join(outdir, f"{game.id()}-{n}", instance.id(), 'lb')
+        outdir = outdir = os.path.join(outdir, f"{str(game)}-{n}", "lb")
         # setup output directory
         os.makedirs(outdir, exist_ok=True)
         outfile = os.path.join(outdir, f"lb.csv")
