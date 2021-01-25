@@ -296,11 +296,12 @@ class IDS(Strategy):
 
 class AsymptoticIDS(IDS):
 
-    def __init__(self, game, estimator, fast_ratio=False, lower_bound_gap=False, opt2=False, alpha=1., ucb_switch=False):
+    def __init__(self, game, estimator, fast_ratio=False, lower_bound_gap=False, opt2=False, alpha=1., ucb_switch=False,fast_info=False):
         self.lower_bound_gap = lower_bound_gap
         self.mms = 1.
         self.opt2 = opt2
         self.alpha = alpha
+        self.fast_info = fast_info
         self.ucb_switch = ucb_switch
         super().__init__(game, estimator, infogain=None, deterministic=False, fast_ratio=fast_ratio)
 
@@ -364,6 +365,18 @@ class AsymptoticIDS(IDS):
         V_norm = psd_norm_squared(nu - theta, V)
         return nu, V_norm
 
+    def compute_nu_fast(self, indices, means, winner):
+        x_best = self._game.get_actions(winner)
+        X = self._game.get_actions(indices)
+        gaps = means[winner] - means
+        theta = self._estimator.lls.theta
+
+        X_norm = self._estimator.lls.var(X - x_best)
+        X_norm[winner] = 1.  # avoid division by zero
+        nu = theta - (gaps/X_norm * cho_solve(self._estimator.lls.get_cholesky_factor(),  -(X - x_best).T)).T
+        V_norm = gaps**2/X_norm
+        return nu, V_norm
+
     def get_next_action(self):
         """
         Compute the IDS solution when there's "enough" data.
@@ -381,7 +394,10 @@ class AsymptoticIDS(IDS):
             self._winner = np.argmax(means)
 
             # compute alternatives and V_norm
-            self._nu, self._V_norm = self.compute_nu(indices)
+            if self.fast_info:
+                self._nu, self._V_norm = self.compute_nu_fast(indices, means, self._winner)
+            else:
+                self._nu, self._V_norm = self.compute_nu(indices)
             V_norm_tmp = self._V_norm.copy()
 
             # compute minimum V-norm without winner
@@ -393,7 +409,6 @@ class AsymptoticIDS(IDS):
         winner, V_norm, nu, means = self._winner, self._V_norm, self._nu, self._means
 
         # check exploration/exploitation condition
-        print(self.ms)
         if self.ms < beta_t:
             self._update_estimator = True  # exploration => collect data
 
@@ -427,7 +442,7 @@ class AsymptoticIDS(IDS):
                 gaps += np.max(1/np.sqrt(self._estimator.lls.s) - delta_s, 0)
 
             if delta_s < 1/np.sqrt(self._estimator.lls.s):
-                print("minimum gap too small?")
+                logging.warning("minimum gap too small?")
 
             alpha = None
             if self.ucb_switch:
@@ -435,6 +450,6 @@ class AsymptoticIDS(IDS):
             infogain = self._info_game(indices, winner, nu, beta_t, V_norm, alpha=alpha)
             return self._ids_sample(indices, gaps, infogain)
         else:
-            print("exploit")
+            logging.info("exploit")
             self._update_estimator = False
             return winner
