@@ -53,7 +53,7 @@ def aggregate(path, aggregator):
     print(f"Reading {len(csv_files)} files ...")
     for i, file in enumerate(csv_files):
         # data[:, :, i] = np.loadtxt(file)
-        # pandas as A LOT faster
+        # pandas is A LOT faster
         data[:, :, i] = pd.read_csv(file, delimiter=" ", header=None).values
 
     print("Files loaded. Aggregating now...")
