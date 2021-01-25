@@ -4,7 +4,7 @@ from scipy.linalg import cho_solve, cho_factor
 
 from pm.utils import difference_matrix, psd_norm_squared
 import cvxpy as cp
-
+import logging
 
 class Solid(Strategy):
     def __init__(self, game, estimator, lambda_1=0., z_0=100, alpha_l=0.1, alpha_w = 0.5, lambda_max=10, reset=True):
@@ -192,13 +192,13 @@ class Solid(Strategy):
 
             if self.phase_length == self.p_k:
                 #update phase counters
-                print('increasing phase: '+str(self.phase_length))
+                logging.info('increasing phase: '+str(self.phase_length))
                 self.phase += 1
                 self.phase_length = 0
                 self.z_k *= np.exp(self.phase / (self.phase -1 ))
                 self.z_k = np.floor(self.z_k)
                 self.p_k = np.int(self.z_k * np.exp(self.phase)) #removed the 2* in exp
-                print('next phase is ' + str(self.p_k))
+                logging.info('next phase is ' + str(self.p_k))
                 # updates alphas
                 self.alpha_w , self.alpha_l = self.update_alphas()
                 #reset
