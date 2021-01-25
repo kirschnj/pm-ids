@@ -84,7 +84,7 @@ def counter_example(**params):
     """
     # alpha = 0.25 such that 8\alpha\epsilon =2\epsilon as in Figure 1
     eps = params.get('eoo_eps', 0.05)
-    alpha = 0.25
+    alpha = 1.0
     X = np.array([[1.,0.],[1-eps, 8*alpha*eps],[0.,1.]])
 
     game = Bandit(X, id=f"counter_example_{eps}")
