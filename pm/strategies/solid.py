@@ -7,7 +7,7 @@ import cvxpy as cp
 import logging
 
 class Solid(Strategy):
-    def __init__(self, game, estimator, lambda_1=0., z_0=100, alpha_l=0.1, alpha_w = 0.5, lambda_max=10, reset=True):
+    def __init__(self, game, estimator, lambda_1=0., z_0=100, alpha_l=0.1, alpha_w = 0.5, lambda_max=10, reset=True, noise_var=1.0):
         #check default values of parameters
         super().__init__(game, estimator)
         self.lambda_t = lambda_1
@@ -22,6 +22,7 @@ class Solid(Strategy):
         self.explo_rounds = 0 # exploration counter per phase
         self.phase_length = 0
         self.phase = 1 # K_1 in article
+        self.sigma_sq = noise_var
 
         # This is only for the one-context-bandit game that is available now:
         self.K = len(self._game.get_indices())
@@ -79,7 +80,7 @@ class Solid(Strategy):
 
         # sq_gaps = (self._means - self._means[self._winner])**2
 
-        delta_g_t = diff_eps + np.sqrt(self._estimator.lls.beta(1/self.explo_rounds) * self._estimator.var(indices))
+        delta_g_t = diff_eps + np.sqrt(self._estimator.lls.beta(1/self.explo_rounds) * self._estimator.var(indices))/self.sigma_sq
 
         return delta_f_t + self.lambda_t * delta_g_t
 

@@ -116,14 +116,9 @@ def counter_example(**params):
     game factory for the counter-example in the End of Optimism
     """
     # alpha = 0.25 such that 8\alpha\epsilon =2\epsilon as in Figure 1
-<<<<<<< HEAD
-    eps = params.get('eoo_eps', 0.01)
-    alpha = 0.1
-=======
     noise_var = params.get('noise_var')
     eps = params.get('eoo_eps', 0.05)
     alpha = params.get('eoo_alpha', 1.)
->>>>>>> de1f96d72883fb1acc14ef4f445f1e80e7e4a38b
     X = np.array([[1.,0.],[1-eps, 8*alpha*eps],[0.,1.]])
 
     game = Bandit(X, id=f"counter_example_v{noise_var}_e{eps}_a{alpha}")
@@ -249,7 +244,8 @@ def solid(game_, **params):
     lls, estimator = estimator_factory(game_, **params)
     reset = params['solid_reset']
     logging.info(f"Using solid with reset={reset}")
-    strategy = Solid(game_, estimator=estimator, reset=reset)  # default values already set
+    noise_var = params.get('noise_var')
+    strategy = Solid(game_, estimator=estimator, reset=reset, noise_var=noise_var)  # default values already set
     return strategy
 
 
