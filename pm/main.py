@@ -375,7 +375,7 @@ def main():
     parser.add_argument('--solid_opt', action="store_true", help="default values from paper for alpha^l, alpha^w")
     parser.add_argument('--solid_z0', type=int, default=100)
 
-    parser.add_argument('--ts_scale', type=float, default=0.1)
+    parser.add_argument('--ts_scale', type=float, default=1.)
 
     # parse arguments
     args = vars(parser.parse_args())
