@@ -3,7 +3,6 @@ import numpy as np
 import os
 import json
 import uuid
-import shutil
 from hashlib import md5
 
 
@@ -20,12 +19,14 @@ from pm.utils import query_yes_no, timestamp, fixed_seed, lower_bound
 import logging
 
 
+def noise_normal(var=1):
+    return lambda size : _noise_normal(size, var=var)
 
-def noise_normal(size):
+def _noise_normal(size, var=1.):
     """
     helper function that generates Gaussian observation noise
     """
-    return np.random.normal(0, 1, size=size)
+    return np.random.normal(0, scale=var**(1/2), size=size)
 
 
 def rbf(x, y):
@@ -42,20 +43,50 @@ def phi(x, X0):
     return rbf(x, X0)
 
 
+def compute_min_gap(X, theta):
+    mean = np.inner(X,theta)
+    gap = np.max(mean) - mean
+    winner = np.argmin(gap)
+    gap[winner] = np.inf
+    return np.min(gap)
+
 def simple_bandit(**params):
     """
     game factory for simple bandit game
     """
-    seed = params.get('seed')
-    with fixed_seed(seed):
-        X = np.random.normal(size=12).reshape(6, 2)
-        X = X / np.linalg.norm(X, axis=1)[:, None]
+    noise_var = params.get('noise_var')
 
-    _id = "simple_bandit"
+    seed = params.get('seed')
+    min_gap = params.get('min_gap')
+    if seed is not None and min_gap is not None:
+        raise RuntimeError("cannot guarantee min_gap with fixed seed")
+
+    theta = np.array([1., 0.])
+
     if seed is not None:
-        _id += f"_{seed}"
+        with fixed_seed(seed):
+            X = np.random.normal(size=12).reshape(6, 2)
+            X = X / np.linalg.norm(X, axis=1)[:, None]
+
+    else:
+        while True:
+            X = np.random.normal(size=12).reshape(6, 2)
+            X = X / np.linalg.norm(X, axis=1)[:, None]
+
+            if min_gap is None:
+                break
+            else:
+                if compute_min_gap(X, theta) > min_gap:
+                    break
+
+    _id = f"simple_bandit_v{noise_var}"
+    if seed is not None:
+        _id += f"_s{seed}"
+    if min_gap is not None:
+        _id += f"_g{min_gap}"
+
     game = Bandit(X, id=_id)
-    instance = GameInstance(game, theta=np.array([1., 0.]), noise=noise_normal)
+    instance = GameInstance(game, theta=theta, noise=noise_normal(noise_var))
 
     return game, instance
 
@@ -69,13 +100,13 @@ def large_gaps(**params):
     # with fixed_seed(3):
     #     X = np.random.normal(size=12).reshape(6, 2)
     #     X = X / np.linalg.norm(X, axis=1)[:, None]
+    noise_var = params.get('noise_var')
 
     X = np.array([[0.97, 0.23], [0.09, -0.9], [-0.09, 0.9], [-0.8, 0.5]])
 
-    _id = "large_gaps"
-
+    _id = f"large_gaps_v{noise_var}"
     game = Bandit(X, id=_id)
-    instance = GameInstance(game, theta=np.array([1., 0.]), noise=noise_normal)
+    instance = GameInstance(game, theta=np.array([1., 0.]), noise=noise_normal(noise_var))
 
     return game, instance
 
@@ -85,91 +116,102 @@ def counter_example(**params):
     game factory for the counter-example in the End of Optimism
     """
     # alpha = 0.25 such that 8\alpha\epsilon =2\epsilon as in Figure 1
+<<<<<<< HEAD
     eps = params.get('eoo_eps', 0.01)
     alpha = 0.1
+=======
+    noise_var = params.get('noise_var')
+    eps = params.get('eoo_eps', 0.05)
+    alpha = params.get('eoo_alpha', 1.)
+>>>>>>> de1f96d72883fb1acc14ef4f445f1e80e7e4a38b
     X = np.array([[1.,0.],[1-eps, 8*alpha*eps],[0.,1.]])
 
-    game = Bandit(X, id=f"counter_example_{eps}")
-    instance = GameInstance(game, theta=np.array([1.,0.]), noise=noise_normal)
+    game = Bandit(X, id=f"counter_example_v{noise_var}_e{eps}_a{alpha}")
+    instance = GameInstance(game, theta=np.array([1.,0.]), noise=noise_normal(noise_var))
 
     return game, instance
 
 
-def laser(**params):
-    """
-    game factory for laser experiment
-    """
-    indirect = params['laser_indirect']
-
-    grid = np.arange(-1, 1.1, 0.5)  # 1.1 to include 1
-    d = len(grid) ** 2
-    X0 = np.array(np.meshgrid(grid, grid)).T.reshape(d, 2)
-
-
-    # these are parameter settings that can be played
-    grid2 = np.arange(-0.5, 0.6, 0.5)
-    X1 = np.array(np.meshgrid(grid2, grid2)).T.reshape(len(grid2) ** 2, 2)
-
-    # compute features for invasive measurements
-    A_obs = []
-    for x in X1:
-        # shift X1 by x
-        # for each element in X1 + x, compute the feature
-        A_obs.append(np.array([phi(y, X0) for y in X1 + x]))
-
-    X_obs = np.zeros((len(A_obs), d))
-    A_obs = np.array(A_obs)
-
-    A_int = []
-    X_int = []
-    # compute featurs for integrated measurements
-    for x in X1:
-        # shift X1 by x
-        # for each element in X1 + x, compute the features for each point
-        # then sum up the features over the points in X1 + x to "integrate" the reward
-        features = np.sum(np.array([phi(y, X0) for y in X1 + x]), axis=0).reshape(1, -1)
-        features /= len(X1)
-        X_int.append(features.flatten())
-
-        if indirect:
-            A_int.append(np.zeros((len(X1), d)))
-        else:
-            # append zero observations to have same output dimension
-            features = np.vstack([features, np.zeros((len(X1) - 1, d))])
-            A_int.append(features)
-
-    X_int = np.array(X_int)
-    A_int = np.array(A_int)
-
-    X = np.vstack([X_obs, X_int])
-    A = np.vstack([A_obs, A_int])
-
-    # set features s.t. the true function is exp(-x^2)
-    theta = np.zeros(d)
-    theta[18] = 1.
-
-    # create game and instance
-    _id = "laser"
-    if indirect:
-        _id += "-indirect"
-
-    game = GenericPM(X, A, id=_id)
-    instance = GameInstance(game, theta, noise_normal)
-
-    return game, instance
+# def laser(**params):
+#     """
+#     game factory for laser experiment
+#     """
+#     indirect = params['laser_indirect']
+#
+#     grid = np.arange(-1, 1.1, 0.5)  # 1.1 to include 1
+#     d = len(grid) ** 2
+#     X0 = np.array(np.meshgrid(grid, grid)).T.reshape(d, 2)
+#
+#
+#     # these are parameter settings that can be played
+#     grid2 = np.arange(-0.5, 0.6, 0.5)
+#     X1 = np.array(np.meshgrid(grid2, grid2)).T.reshape(len(grid2) ** 2, 2)
+#
+#     # compute features for invasive measurements
+#     A_obs = []
+#     for x in X1:
+#         # shift X1 by x
+#         # for each element in X1 + x, compute the feature
+#         A_obs.append(np.array([phi(y, X0) for y in X1 + x]))
+#
+#     X_obs = np.zeros((len(A_obs), d))
+#     A_obs = np.array(A_obs)
+#
+#     A_int = []
+#     X_int = []
+#     # compute featurs for integrated measurements
+#     for x in X1:
+#         # shift X1 by x
+#         # for each element in X1 + x, compute the features for each point
+#         # then sum up the features over the points in X1 + x to "integrate" the reward
+#         features = np.sum(np.array([phi(y, X0) for y in X1 + x]), axis=0).reshape(1, -1)
+#         features /= len(X1)
+#         X_int.append(features.flatten())
+#
+#         if indirect:
+#             A_int.append(np.zeros((len(X1), d)))
+#         else:
+#             # append zero observations to have same output dimension
+#             features = np.vstack([features, np.zeros((len(X1) - 1, d))])
+#             A_int.append(features)
+#
+#     X_int = np.array(X_int)
+#     A_int = np.array(A_int)
+#
+#     X = np.vstack([X_obs, X_int])
+#     A = np.vstack([A_obs, A_int])
+#
+#     # set features s.t. the true function is exp(-x^2)
+#     theta = np.zeros(d)
+#     theta[18] = 1.
+#
+#     # create game and instance
+#     _id = "laser"
+#     if indirect:
+#         _id += "-indirect"
+#
+#     game = GenericPM(X, A, id=_id)
+#     instance = GameInstance(game, theta, noise_normal)
+#
+#     return game, instance
 
 # list of available games
-GAMES = [simple_bandit, large_gaps ,laser, counter_example]
+GAMES = [simple_bandit, large_gaps, counter_example]
+
+def estimator_factory(game_, **params):
+    noise_var = params.get('noise_var')
+    delta = params.get('delta')
+    beta_logdet = params.get('beta_logdet', False)
+    lls = RegularizedLeastSquares(d=game_.get_d(), beta_logdet=beta_logdet, noise_var=noise_var)
+    estimator = RegretEstimator(game=game_, lls=lls, delta=delta, truncate=False)
+    return lls, estimator
 
 
 def ucb(game_, **params):
     """
     strategy factory for UCB
     """
-    delta = params.get('delta')
-    beta_logdet = params.get('beta_logdet', False)
-    lls = RegularizedLeastSquares(d=game_.get_d(), beta_logdet=beta_logdet)
-    estimator = RegretEstimator(game=game_, lls=lls, delta=delta, truncate=False)
+    lls, estimator = estimator_factory(game_, **params)
     strategy = UCB(game_, estimator=estimator)
     return strategy
 
@@ -182,17 +224,14 @@ def ids(game_, **params):
     infogain_dict = dict([(f.__name__, f) for f in INFOGAIN])
     infogain = infogain_dict[params.get('infogain', 'full')]
     dids = params.get('dids')
-    delta = params.get('delta')
 
-    beta_logdet = params.get('beta_logdet', False)
-    lls = RegularizedLeastSquares(d=game_.get_d(), beta_logdet=beta_logdet)
-    estimator = RegretEstimator(game=game_, lls=lls, delta=delta, truncate=False)
+    lls, estimator = estimator_factory(game_, **params)
     strategy = IDS(game_, infogain=infogain, estimator=estimator, deterministic=dids)
     return strategy
 
 def asymptotic_ids(game_, **params):
-    beta_logdet = params.get('beta_logdet', False)
-    lls = RegularizedLeastSquares(d=game_.get_d(), beta_logdet=beta_logdet)
+    lls, estimator = estimator_factory(game_, **params)
+
     fast_ratio = params.get('fast_ratio', False)
     lower_bound_gap = params.get('lower_bound_gap', False)
     opt2 = params.get('opt2', False)
@@ -203,19 +242,14 @@ def asymptotic_ids(game_, **params):
     if params.get('delta') is not None:
         logging.warning("Setting delta has no effect for asymptotic_ids")
     # anytime estimator
-    estimator = RegretEstimator(game=game_, lls=lls, delta=None, truncate=True, ucb_estimates=False)
     strategy = AsymptoticIDS(game_, estimator=estimator, fast_ratio=fast_ratio, lower_bound_gap=lower_bound_gap, opt2=opt2, alpha=alpha, ucb_switch=ucb_switch, fast_info=fast_info)
     return strategy
 
 def solid(game_, **params):
-    beta_logdet = params.get('beta_logdet', False)
-    lls = RegularizedLeastSquares(d=game_.get_d(), beta_logdet=beta_logdet)
-
+    lls, estimator = estimator_factory(game_, **params)
     reset = params['solid_reset']
     logging.info(f"Using solid with reset={reset}")
-    estimator = RegretEstimator(game=game_, lls=lls, delta=None)
-    strategy = Solid(game_, estimator=estimator, reset=reset) #default values already set
-    # print('game vectors are '+str(game_._X))
+    strategy = Solid(game_, estimator=estimator, reset=reset)  # default values already set
     return strategy
 
 
@@ -304,6 +338,8 @@ def main():
     parser.add_argument('--n', type=int, required=True)
     parser.add_argument('--outdir', type=str)
     parser.add_argument('--seed', type=int)
+    parser.add_argument('--min_gap', type=float)
+    parser.add_argument('--noise_var', type=float, default=1.)
     parser.add_argument('--rep', type=int, default=1)
     parser.add_argument('--infogain', choices=[f.__name__ for f in INFOGAIN])
     parser.add_argument('--dids', action='store_true')
@@ -317,6 +353,7 @@ def main():
     parser.add_argument('--opt2', type=bool, default=False)
     parser.add_argument('--alpha', type=float, default=1.)
     parser.add_argument('--eoo_eps', type=float, default=0.01)
+    parser.add_argument('--eoo_alpha', type=float, default=1.)
     parser.add_argument('--ucb_switch', help="ucb-ids switch version", action="store_true")
     parser.add_argument('-v', '--verbose', help="show info output", action="store_true")
     parser.add_argument('-vv', '--verbose2', help="show debug output", action="store_true")

@@ -3,6 +3,7 @@ import glob
 import os
 import numpy as np
 import pandas as pd
+import gc
 
 def regret(data):
     """
@@ -62,6 +63,8 @@ def aggregate(path, aggregator):
     # save in csv file
     np.savetxt(aggr_file, aggr_data)
     print(f"Saved {aggr_file}")
+
+    gc.collect()
 
 
 def main():
