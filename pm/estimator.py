@@ -6,7 +6,7 @@ from pm.utils import difference_matrix
 
 class RegularizedLeastSquares:
 
-    def __init__(self, d, beta_logdet=True, noise_var=1.):
+    def __init__(self, d, beta_logdet=True, noise_var=1., scale_obs=False):
         self._d = d
         self._V = np.eye(self._d)
         self._XY = np.zeros(self._d)
@@ -14,6 +14,7 @@ class RegularizedLeastSquares:
         self.beta_logdet = beta_logdet
         self.noise_var = noise_var
         self.noise_std = np.sqrt(self.noise_var)
+        self.scale_obs = scale_obs  # if true, feature vectors and observation are scaled by 1/noise_std (used to compute the posterior for TS)
 
         self._update_cache()
 
@@ -22,6 +23,9 @@ class RegularizedLeastSquares:
         self._theta = cho_solve(self._cholesky, self._XY)
 
     def add_data(self, x, y):
+        if self.scale_obs:
+            x = x/self.noise_std
+            y = y/self.noise_std
         self._V += x.T.dot(x)
         self._XY += x.T.dot(y)
         self._update_cache()

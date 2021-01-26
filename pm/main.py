@@ -196,9 +196,10 @@ GAMES = [simple_bandit, large_gaps, counter_example]
 
 def estimator_factory(game_, **params):
     noise_var = params.get('noise_var')
+    scale_obs = params.get('lls_scale_obs', None)
     delta = params.get('delta')
     beta_logdet = params.get('beta_logdet', False)
-    lls = RegularizedLeastSquares(d=game_.get_d(), beta_logdet=beta_logdet, noise_var=noise_var)
+    lls = RegularizedLeastSquares(d=game_.get_d(), beta_logdet=beta_logdet, noise_var=noise_var, scale_obs=scale_obs)
     estimator = RegretEstimator(game=game_, lls=lls, delta=delta, truncate=False)
     return lls, estimator
 
@@ -369,7 +370,7 @@ def main():
 
     # parameter for lls
     parser.add_argument('--beta_logdet', help="use log-det to compute beta. without this flag, beta=2log(1/delta) + d log log (n)", action="store_true")
-
+    parser.add_argument('--lls_scale_obs', action='store_true')
     # parameters for solid
     parser.add_argument('--solid_reset', action="store_true")
     parser.add_argument('--solid_opt', action="store_true", help="default values from paper for alpha^l, alpha^w")
