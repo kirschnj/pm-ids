@@ -12,6 +12,7 @@ from pm.game import GameInstance
 from pm.games.bandit import Bandit
 from pm.games.pm import GenericPM
 from pm.strategies.ids import IDS, AsymptoticIDS, full, directed2, directeducb, directed3
+from pm.strategies.ts import TS
 from pm.strategies.ucb import UCB
 from pm.strategies.solid import Solid
 from pm.utils import query_yes_no, timestamp, fixed_seed, lower_bound
@@ -202,6 +203,15 @@ def estimator_factory(game_, **params):
     return lls, estimator
 
 
+def ts(game_, **params):
+    """
+    strategy factory for UCB
+    """
+    lls, estimator = estimator_factory(game_, **params)
+    ts_scale = params.get('ts_scale')
+    strategy = TS(game_, estimator=estimator, noise_std=ts_scale)
+    return strategy
+
 def ucb(game_, **params):
     """
     strategy factory for UCB
@@ -243,16 +253,18 @@ def asymptotic_ids(game_, **params):
 def solid(game_, **params):
     lls, estimator = estimator_factory(game_, **params)
     reset = params['solid_reset']
+    z0 = params.get('solid_z0', 100)
+    opt = params.get('solid_opt', False)
     logging.info(f"Using solid with reset={reset}")
     noise_var = params.get('noise_var')
-    strategy = Solid(game_, estimator=estimator, reset=reset, noise_var=noise_var)  # default values already set
+    strategy = Solid(game_, estimator=estimator, reset=reset, noise_var=noise_var, z_0=z0, opt=opt)  # default values already set
     return strategy
 
 
 
 
 # list of available strategies
-STRATEGIES = [ucb, ids, asymptotic_ids, solid]
+STRATEGIES = [ucb, ts, ids, asymptotic_ids, solid]
 # list of available info gains for IDS
 INFOGAIN = [full, directed2, directed3, directeducb]
 
@@ -360,6 +372,10 @@ def main():
 
     # parameters for solid
     parser.add_argument('--solid_reset', action="store_true")
+    parser.add_argument('--solid_opt', action="store_true", help="default values from paper for alpha^l, alpha^w")
+    parser.add_argument('--solid_z0', type=int, default=100)
+
+    parser.add_argument('--ts_scale', type=float, default=0.1)
 
     # parse arguments
     args = vars(parser.parse_args())

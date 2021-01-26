@@ -7,7 +7,7 @@ import cvxpy as cp
 import logging
 
 class Solid(Strategy):
-    def __init__(self, game, estimator, lambda_1=0., z_0=100, alpha_l=0.1, alpha_w = 0.5, lambda_max=10, reset=True, noise_var=1.0):
+    def __init__(self, game, estimator, lambda_1=0., z_0=100, alpha_l=0.1, alpha_w = 0.5, lambda_max=10, reset=True, noise_var=1.0, opt=False):
         #check default values of parameters
         super().__init__(game, estimator)
         self.lambda_t = lambda_1
@@ -23,6 +23,8 @@ class Solid(Strategy):
         self.phase_length = 0
         self.phase = 1 # K_1 in article
         self.sigma_sq = noise_var
+        self.opt = opt  # if true, use heuristic values from paper section K.3.
+                        # default values from paper for alpha^l, alpha^w
 
         # This is only for the one-context-bandit game that is available now:
         self.K = len(self._game.get_indices())
@@ -87,6 +89,8 @@ class Solid(Strategy):
 
 
     def update_alphas(self):
+        if self.opt:
+            return 0.1, 0.5
         return 1/np.sqrt(self.p_k), 1/np.sqrt(self.p_k)
 
     def get_Vw(self, indices, eps=0.):
@@ -183,12 +187,15 @@ class Solid(Strategy):
         if self._min_ratio > beta_t:
             #exploitation step
             #recompute at every round because estimator changes
-            # print('exploitation !')
-
+            logging.debug(f'{self._t}: exploit round')
+            # if self._winner != 0:
+                # logging.debug(f'action: {self._winner}')
             return self._winner
 
         else:
+            # logging.debug(f'{self._t}: explore round')
             chosen_action = np.random.choice(indices, p=self.w_t)
+            # logging.debug(f'action: {chosen_action}')
             # updates
             self.explo_rounds += 1
             self.phase_length += 1
