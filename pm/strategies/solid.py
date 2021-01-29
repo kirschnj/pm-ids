@@ -144,14 +144,18 @@ class Solid(Strategy):
 
         sq_gap = gaps[second_best]**2
         # same as in estimator.lls.var(x) but with the general V_matrix
-        cholesky = cho_factor(V_matrix)
+        for i in range(10):
+            try:
+                # might fail due to numerical issues
+                cholesky = cho_factor(V_matrix)
+            except np.linalg.LinAlgError:
+                # try regularize
+                V_matrix += 1.5**i*0.001*np.eye(V_matrix.shape[0])
+                logging.info(f"increasing regularization in round {self._t}")
         sol_x = cho_solve(cholesky, (x_best-x_2best).T).T
-        sq_norm =  np.sum((x_best-x_2best)*sol_x, axis=-1)
+        sq_norm = np.sum((x_best-x_2best)*sol_x, axis=-1)
 
-        return  sq_gap / sq_norm
-
-
-
+        return sq_gap / sq_norm
 
     def get_next_action(self):
         indices = self._game.get_indices()
