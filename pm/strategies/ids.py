@@ -2,6 +2,8 @@ import logging
 import numpy as np
 import cvxpy as cp
 from scipy.linalg import cho_solve, cho_factor
+import osqp
+from scipy import sparse
 
 from pm.utils import difference_matrix, psd_norm_squared
 from pm.strategy import Strategy
@@ -303,6 +305,8 @@ class AsymptoticIDS(IDS):
         self.alpha = alpha
         self.fast_info = fast_info
         self.ucb_switch = ucb_switch
+        self._nu = None
+        self._osqp_solvers = [None] * game.k
         super().__init__(game, estimator, infogain=None, deterministic=False, fast_ratio=fast_ratio)
 
     def _info_game(self, indices, winner, nu, beta, V_norm, alpha=None):
@@ -338,7 +342,7 @@ class AsymptoticIDS(IDS):
         I = q @ (np.abs((nu - lls.theta) @ X.T) + I_optimistic)**2
         return I
 
-    def compute_nu(self, indices):
+    def compute_nu(self, indices, winner, nu_old):
         """
         Compute the alternative parameters and Vnorm for each cell
         """
@@ -350,14 +354,75 @@ class AsymptoticIDS(IDS):
         C = difference_matrix(X)
         # for each action, solve the quadratic program to find the alternative
         for i in indices:
+            if i == winner:
+                nu[i] = theta
+                continue
+
             x = cp.Variable(d)
+
+            if nu_old is not None:
+                x.value = nu_old[i]
             q = -2 * (V @ theta)
             G = -C[i, :, :]
 
             prob = cp.Problem(cp.Minimize(cp.quad_form(x, V) + q.T @ x), [G @ x <= 0])
-            prob.solve()
+            # prob.solve(solver='ECOS')#, solver_specific_opts={'max_iter' : 2000})
+            prob.solve(solver='OSQP', adaptive_rho=True, max_iter=2000, warm_start=True)
+            # Solve problem
+            nu[i] = x.value
 
-            nu[i:] = x.value
+
+
+        # check corner cases in the bandit case : can the projected nu have a very large norm ? => regularization ?
+        # normalize as per our unit ball hypothesis => creates bugs when the projection on the cone is too close to origin. Also does it make sense ?
+        # nu /= np.linalg.norm(nu, axis=1)[:, None]
+        V_norm = psd_norm_squared(nu - theta, V)
+        return nu, V_norm
+
+    def compute_nu_osqp(self, indices, winner, nu_old):
+        """
+        Compute the alternative parameters and Vnorm for each cell
+        """
+        d = self._game.d
+        X = self._game.get_actions(indices)
+        theta = self._estimator.lls.theta
+        V = self._estimator.lls.V
+        nu = np.zeros((len(indices), d))
+        C = difference_matrix(X)
+        # for each action, solve the quadratic program to find the alternative
+        for i in indices:
+            if i == winner:
+                nu[i] = theta
+                continue
+
+            q = -2 * (V @ theta)
+            G = -C[i, :, :]
+            P = 2*V
+
+            sparse_G = sparse.csc_matrix(G)
+            sparse_P = sparse.csc_matrix(P)
+
+            settings = dict(
+                verbose=False,
+                eps_abs=1e-6,
+                eps_rel=1e-6,
+            )
+            # if self._osqp_solvers[i] is None:
+            prob = osqp.OSQP()
+            prob.setup(P=sparse_P, q=q, A=sparse_G, u=np.zeros(G.shape[0]), **settings)
+            # storing the problem instances and updating the matrices doesn't seem to work
+            # self._osqp_solvers[i] = prob
+            # else:
+            #     prob = self._osqp_solvers[i]
+            #     prob.update(Px=sparse.triu(sparse_P).data, Ax=sparse_G.data)
+            #     prob.update(q=q)#, Ax=G, Ax_idx=sparse_G.indices)
+
+            if nu_old is not None:
+                prob.warm_start(x=nu_old[i])
+
+            res = prob.solve()
+            # print(res.x - nu[i])
+            nu[i] = res.x
 
         # check corner cases in the bandit case : can the projected nu have a very large norm ? => regularization ?
         # normalize as per our unit ball hypothesis => creates bugs when the projection on the cone is too close to origin. Also does it make sense ?
@@ -397,7 +462,10 @@ class AsymptoticIDS(IDS):
             if self.fast_info:
                 self._nu, self._V_norm = self.compute_nu_fast(indices, means, self._winner)
             else:
-                self._nu, self._V_norm = self.compute_nu(indices)
+                # self._nu, self._V_norm = self.compute_nu(indices, self._winner, nu_old=self._nu)
+                self._nu, self._V_norm = self.compute_nu_osqp(indices, self._winner, nu_old=self._nu)
+                # print(nu - self._nu)
+                # print(np.linalg.norm(nu - self._nu))
             V_norm_tmp = self._V_norm.copy()
 
             # compute minimum V-norm without winner
@@ -442,7 +510,7 @@ class AsymptoticIDS(IDS):
                 gaps += np.max(1/np.sqrt(self._estimator.lls.s) - delta_s, 0)
 
             if delta_s < 1/np.sqrt(self._estimator.lls.s):
-                logging.warning("minimum gap too small?")
+                logging.info("minimum gap too small?")
 
             alpha = None
             if self.ucb_switch:
