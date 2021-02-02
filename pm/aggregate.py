@@ -2,6 +2,8 @@ import argparse
 import glob
 import os
 import numpy as np
+import pandas as pd
+import gc
 
 def regret(data):
     """
@@ -12,8 +14,17 @@ def regret(data):
     regret_std = np.std(regret, axis=1)
     return np.vstack([regret_avg, regret_std]).T
 
+def allocation(data):
+    """
+    aggregator for averaged allocations (third column of each csv)
+    """
+    allocations = data[:,2,:]
+    # K = np.unique(allocations[0,:])).size
+    allocations_avg = np.apply_along_axis(lambda x:np.histogram(x, bins=K, density=True)[0],0, allocations)
 
-AGGREGATORS = [regret]
+    return allocations_avg
+
+AGGREGATORS = [regret, allocation]
 
 
 def aggregate(path, aggregator):
@@ -40,14 +51,20 @@ def aggregate(path, aggregator):
     data = np.empty(shape=(*csv_data_0.shape, len(csv_files)))
 
     # go through all csv files and store data
+    print(f"Reading {len(csv_files)} files ...")
     for i, file in enumerate(csv_files):
-        data[:, :, i] = np.loadtxt(file)
+        # data[:, :, i] = np.loadtxt(file)
+        # pandas is A LOT faster
+        data[:, :, i] = pd.read_csv(file, delimiter=" ", header=None).values
 
+    print("Files loaded. Aggregating now...")
     aggr_data = aggregator(data)
 
     # save in csv file
     np.savetxt(aggr_file, aggr_data)
     print(f"Saved {aggr_file}")
+
+    gc.collect()
 
 
 def main():

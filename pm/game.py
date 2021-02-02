@@ -9,17 +9,26 @@ class Game:
     - observation map set
     """
 
-    def get_d(self):
+    @property
+    def d(self):
         """
         feature dimension
         """
         return self.get_actions(self.get_indices()[0:1]).shape[1]
 
-    def get_m(self):
+    @property
+    def m(self):
         """
         observation dimension
         """
         return self.get_observation_maps(self.get_indices()[0:1]).shape[1]
+
+    @property
+    def k(self):
+        """
+        number of actions
+        """
+        return len(self.get_indices())
 
     def get_indices(self):
         """
@@ -39,16 +48,13 @@ class Game:
         """
         raise NotImplemented
 
-    def id(self):
-        """
-        identifier used in the directory structure to store the results
-        """
-        raise NotImplemented
+    def __str__(self):
+        return type(self).__name__
 
 
 class GameInstance:
 
-    def __init__(self, game, theta, noise, id=""):
+    def __init__(self, game, theta, noise, id=None):
         """
 
         :param game:
@@ -67,11 +73,22 @@ class GameInstance:
         X = self._game.get_actions(indices)
         return X.dot(self._theta)
 
-    def get_max_reward(self):
+    def max_reward(self):
         """
         maximum reward of the game
         """
         return self._max_reward
+
+    def min_gap(self):
+        """
+        compute minimum gap
+        """
+        indices = self._game.get_indices()
+        rewards = self.get_reward(indices)
+        winner = np.argmax(rewards)
+        gaps = rewards[winner] - rewards
+        gaps[winner] = np.Infinity
+        return np.min(gaps)
 
     def get_observation(self, indices):
         """
@@ -87,8 +104,7 @@ class GameInstance:
         y = self.get_observation(indices)
         return y + self._noise(y.shape)
 
-    def id(self):
-        """
-        identifier used in the directory structure to store the results
-        """
-        return self._id
+    def __str__(self):
+        if self._id is not None:
+            return self._id
+        return type(self).__name__
