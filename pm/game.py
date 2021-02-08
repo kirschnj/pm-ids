@@ -53,16 +53,15 @@ class Game:
 
 
 class GameInstance:
-
-    def __init__(self, game, theta, noise, id=None):
+    def __init__(self, game, theta, noise, id=None, confounder=None):
         """
-
         :param game:
         :param noise: function that takes a shape argument
         """
         self._game = game
         self._theta = theta
         self._noise = noise
+        self._confounder = confounder
         self._id = id
         self._max_reward = np.max(self.get_reward(self._game.get_indices()))
 
@@ -101,8 +100,12 @@ class GameInstance:
         """
         shape = (len(indices),m)
         """
-        y = self.get_observation(indices)
-        return y + self._noise(y.shape)
+        y_exact = self.get_observation(indices)
+        y = y_exact + self._noise(y_exact.shape)
+        if self._confounder is not None:
+            y += self._confounder()
+            self._confounder.record_outcome(y_exact)
+        return y
 
     def __str__(self):
         if self._id is not None:

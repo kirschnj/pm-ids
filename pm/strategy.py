@@ -5,7 +5,7 @@ class Strategy:
     Base class for a strategy
     """
 
-    def __init__(self, game, estimator):
+    def __init__(self, game, estimator=None):
         self._game = game
         self._estimator = estimator
 

@@ -7,30 +7,38 @@ from hashlib import md5
 
 
 from pm import aggregate
+from pm.benchmarks import Camelback, SquaredExponential
 from pm.estimator import RegularizedLeastSquares, RegretEstimator
 from pm.game import GameInstance
 from pm.games.bandit import Bandit
-from pm.games.confounded import Confounded
+from pm.games.confounded import ConfoundedToDuelingGame, ConfoundedToDuelingInstance
+from pm.games.continuous import ContinuousGame, ContinuousInstance
+from pm.games.noise import noise_normal, PeriodicDrift, NegativeDrift, NegativeRepeat, NegativeRepeatTwo, MinusBest, \
+    AlternatingMinusBest, NegativeBernoulli, Bernoulli, PhasedOffset, PositiveRepeat, AutoCalibration
 from pm.games.pm import GenericPM
-from pm.strategies.ids import IDS, full, directed2, directeducb, directed3
-from pm.strategies.two import Two, InternalDuelingGame
+from pm.strategies.bose import DoubleRobustLLS, Bose
+from pm.strategies.semits import SemiparametricTS
+from pm.strategies.ids import IDS, full, directed2, directeducb, directed3, DuelingIDS, DuelingKernelIDS
+# from pm.strategies.two import Two
 from pm.strategies.ids import IDS, AsymptoticIDS, full, directed2, directeducb, directed3
 from pm.strategies.ts import TS
-from pm.strategies.ucb import UCB
+from pm.strategies.ucb import UCB, GPUCB
 from pm.strategies.solid import Solid
 from pm.utils import query_yes_no, timestamp, fixed_seed, lower_bound
 
 import logging
 
 
-def noise_normal(var=1):
-    return lambda size : _noise_normal(size, var=var)
+def noise_factory(**params):
+    noise_var = params.get('noise_var')
+    noise = noise_normal(noise_var)
+    confounder = params.get('confounder', None)
+    if confounder is not None:
+        confounders = dict([(f.__name__, f) for f in CONFOUNDERS])
+        confounder = confounders[confounder]
+        confounder = confounder()
 
-def _noise_normal(size, var=1.):
-    """
-    helper function that generates Gaussian observation noise
-    """
-    return np.random.normal(0, scale=var**(1/2), size=size)
+    return noise, confounder
 
 
 def rbf(x, y):
@@ -54,27 +62,33 @@ def compute_min_gap(X, theta):
     gap[winner] = np.inf
     return np.min(gap)
 
+
 def simple_bandit(**params):
     """
     game factory for simple bandit game
     """
-    noise_var = params.get('noise_var')
+
+    noise, confounder = noise_factory(**params)
 
     seed = params.get('seed')
     min_gap = params.get('min_gap')
     if seed is not None and min_gap is not None:
         raise RuntimeError("cannot guarantee min_gap with fixed seed")
 
-    theta = np.array([1., 0.])
+    d = 4
+    k = 20
+
+    theta = np.zeros(d)
+    theta[0] = 1.
 
     if seed is not None:
         with fixed_seed(seed):
-            X = np.random.normal(size=12).reshape(6, 2)
+            X = np.random.normal(size=d*k).reshape(k, d)
             X = X / np.linalg.norm(X, axis=1)[:, None]
 
     else:
         while True:
-            X = np.random.normal(size=12).reshape(6, 2)
+            X = np.random.normal(size=d*k).reshape(k, d)
             X = X / np.linalg.norm(X, axis=1)[:, None]
 
             if min_gap is None:
@@ -83,26 +97,41 @@ def simple_bandit(**params):
                 if compute_min_gap(X, theta) > min_gap:
                     break
 
-    _id = f"simple_bandit_v{noise_var}"
+    _id = f"simple_bandit_d{d}_k{k}_v{params.get('noise_var')}"
     if seed is not None:
         _id += f"_s{seed}"
     if min_gap is not None:
         _id += f"_g{min_gap}"
+    if confounder is not None:
+        _id += f"_c{type(confounder).__name__}"
 
     game = Bandit(X, id=_id)
-    instance = GameInstance(game, theta=theta, noise=noise_normal(noise_var))
+    instance = GameInstance(game, theta=theta, noise=noise, confounder=confounder)
 
     return game, instance
 
-def sin_lin_confounding(t):
-    return 20*np.sin(0.2*t) + t
-
-def confounded_simple_bandit(**params):
-    game, instance = simple_bandit(**params)
-    instance = Confounded(game, instance, sin_lin_confounding)
+def camelback(**params):
+    noise, confounder = noise_factory(**params)
+    _camelback = Camelback()
+    points_per_dim = params.get('points_per_dim')
+    label = f"camelback_v{params.get('noise_var')}"
+    if params.get('confounder'):
+        label += f"_c{params.get('confounder')}"
+    game = ContinuousGame(_camelback.bounds, points_per_dim=points_per_dim, name=label)
+    instance = ContinuousInstance(game, _camelback, noise, confounder)
     return game, instance
 
-
+def se(**params):
+    d = params.get('se_d', 2)
+    points_per_dim = params.get('points_per_dim')
+    noise, confounder = noise_factory(**params)
+    _se = SquaredExponential(d=d)
+    label = f"se{d}_v{params.get('noise_var')}"
+    if params.get('confounder'):
+        label += f"_c{params.get('confounder')}"
+    game = ContinuousGame(_se.bounds, points_per_dim=points_per_dim, name=label)
+    instance = ContinuousInstance(game, _se, noise, confounder)
+    return game, instance
 
 def large_gaps(**params):
     """
@@ -119,7 +148,6 @@ def large_gaps(**params):
     _id = f"large_gaps_v{noise_var}"
     game = Bandit(X, id=_id)
     instance = GameInstance(game, theta=np.array([1., 0.]), noise=noise_normal(noise_var))
-
     return game, instance
 
 
@@ -135,7 +163,6 @@ def counter_example(**params):
 
     game = Bandit(X, id=f"counter_example_v{noise_var}_e{eps}_a{alpha}")
     instance = GameInstance(game, theta=np.array([1.,0.]), noise=noise_normal(noise_var))
-
     return game, instance
 
 
@@ -203,7 +230,8 @@ def counter_example(**params):
 #     return game, instance
 
 # list of available games
-GAMES = [simple_bandit, large_gaps, counter_example, confounded_simple_bandit]
+GAMES = [simple_bandit, large_gaps, counter_example, camelback, se]
+CONFOUNDERS = [PeriodicDrift, NegativeDrift, NegativeRepeat, NegativeRepeatTwo, MinusBest, AlternatingMinusBest, NegativeBernoulli, Bernoulli, PhasedOffset, PositiveRepeat, AutoCalibration]
 
 def estimator_factory(game_, **params):
     noise_var = params.get('noise_var')
@@ -231,6 +259,34 @@ def ucb(game_, **params):
     strategy = UCB(game_, estimator=estimator)
     return strategy
 
+def gpucb(game_, **params):
+    delta = params.get('delta')
+    reg = params.get('reg')
+    lengthscale = params.get('lengthscale')
+    beta = params.get('beta')
+    strategy = GPUCB(game_, delta=delta, reg=reg, beta=beta, lengthscale=lengthscale)
+    return strategy
+
+
+def dueling_kids(game_, **params):
+    delta = params.get('delta')
+    reg = params.get('reg')
+    beta = params.get('beta')
+    lengthscale = params.get('lengthscale')
+    strategy = DuelingKernelIDS(game_, delta=delta, reg=reg, beta=beta, lengthscale=lengthscale)
+    return strategy
+
+
+def bose(game_, **params):
+    delta = params.get('delta')
+    robust_lls = DoubleRobustLLS(game_.d)
+    strategy = Bose(game_, robust_lls, delta=delta)
+    return strategy
+
+def semiparametric_ts(game_, **params):
+    delta = params.get('delta')
+    strategy = SemiparametricTS(game_, delta)
+    return strategy
 
 def ids(game_, **params):
     """
@@ -245,20 +301,10 @@ def ids(game_, **params):
     strategy = IDS(game_, infogain=infogain, estimator=estimator, deterministic=dids)
     return strategy
 
-def ids_two(game_, **params):
-    # print(game_.get_actions(game_.get_indices()))
-    # print(game_.get_observation_maps(game_.get_indices()))
-
-    two_game = InternalDuelingGame(game_)
-
-    # print(two_game.get_indices())
-    # print(two_game.get_observation_maps(two_game.get_indices()))
-    #
-    # exit()
-    ids_strategy = ids(two_game, **params)
-    two = Two(ids_strategy)
-    return two
-
+def dueling_ids(game_, **params):
+    lls, estimator = estimator_factory(game_, **params)
+    strategy = DuelingIDS(game_, estimator)
+    return strategy
 
 def asymptotic_ids(game_, **params):
     lls, estimator = estimator_factory(game_, **params)
@@ -286,11 +332,17 @@ def solid(game_, **params):
     strategy = Solid(game_, estimator=estimator, reset=reset, noise_var=noise_var, z_0=z0, opt=opt)  # default values already set
     return strategy
 
-
+def confounded_reduction(game_, instance, **params):
+    two_point = params.get('to_dueling') == 'two'
+    compensate = params.pop('compensate')
+    params['compensated'] = True
+    cgame = ConfoundedToDuelingGame(game_, two_point=two_point)
+    cinstance = ConfoundedToDuelingInstance(instance, two_point=two_point, compensate=compensate)
+    return cgame, cinstance
 
 
 # list of available strategies
-STRATEGIES = [ucb, ts, ids, asymptotic_ids, solid, ids_two]
+STRATEGIES = [ucb, ts, ids, asymptotic_ids, solid, dueling_ids, bose, semiparametric_ts, gpucb, dueling_kids]
 
 # list of available info gains for IDS
 INFOGAIN = [full, directed2, directed3, directeducb]
@@ -302,10 +354,17 @@ def run(game_factory, strategy_factory, **params):
     """
     # setup game and instance
     game, instance = game_factory(**params)
-    logging.info(f"Minimum gap: {instance.min_gap():0.3f}")
+    game_copy = game
+
+    if not isinstance(instance, ContinuousInstance):
+        logging.info(f"Minimum gap: {instance.min_gap():0.3f}")
+    # reduction
+    if params.get('to_dueling'):
+        game, instance = confounded_reduction(game, instance, **params)
 
     # setup strategy
     strategy = strategy_factory(game, **params)
+
 
     # other parameters
     n = params.get('n')
@@ -318,7 +377,10 @@ def run(game_factory, strategy_factory, **params):
     hash = md5(json.dumps(store_params, sort_keys=True).encode()).hexdigest()
 
     # outdir: game_name-{n}/strategy_name-{hash}
-    outdir = os.path.join(outdir, f"{str(game)}-{n}", f"{str(strategy)}-{hash}")
+    game_name = str(game_copy)
+    if params.get('compensate'):
+        game_name = game_name + '_compensate'
+    outdir = os.path.join(outdir, f"{game_name}-{n}", f"{str(strategy)}-{hash}")
 
     # setup output directory
     os.makedirs(outdir, exist_ok=True)
@@ -332,16 +394,15 @@ def run(game_factory, strategy_factory, **params):
 
     outfile = os.path.join(outdir, f"run-{timestamp()}-{uuid.uuid4().hex}.csv")
 
-    data = np.empty(shape=(n), dtype=([('regret', 'f8'), ('cum_regret', 'f8'), ('action', 'i8')]))  # store data for the csv file
+    data = np.empty(shape=(n), dtype=([('regret', 'f8'), ('cum_regret', 'f8')]))  # store data for the csv file
     cumulative_regret = 0
 
+    compensate = params.get('compensate') and not params.get('to_dueling')
+    last_obs = 0.
     # run game
     for t in range(n):
         # call strategy
         x = [strategy.get_next_action()]
-        #
-        # if x[0] != 0:
-        #     print(f"Arm: {x}")
 
         # compute reward and regret
         reward = instance.get_reward(x)
@@ -349,14 +410,19 @@ def run(game_factory, strategy_factory, **params):
         cumulative_regret += regret
 
         # store data : regret, cumulative regret, index of arm pulled
-        data[t] = regret, cumulative_regret, x[0]
+        data[t] = regret, cumulative_regret
 
         # get observation and update strategy
         observation = instance.get_noisy_observation(x)
-        strategy.add_observations(x, observation)
+
+        # print(observation, last_obs)
+        strategy.add_observations(x, observation - last_obs)
+        # if --compensate, we subtract the last observation
+        if compensate:
+            last_obs = observation
 
     # outfile
-    np.savetxt(outfile, data, fmt=['%f', '%f', '%i'])
+    np.savetxt(outfile, data, fmt=['%f', '%f'])
 
     return outdir
 
@@ -365,20 +431,39 @@ def main():
     # store available games and strategies as a dict
     games = dict([(f.__name__, f) for f in GAMES])
     strategies = dict([(f.__name__, f) for f in STRATEGIES])
+    confounders = dict([(f.__name__, f) for f in CONFOUNDERS])
 
     # setup argument parse
     parser = argparse.ArgumentParser(description='run a partial monitoring game.')
+
+    # basic settings
     parser.add_argument('game', choices=games.keys())
     parser.add_argument('strategy', choices=strategies.keys())
     parser.add_argument('--n', type=int, required=True)
+    parser.add_argument('--rep', type=int, default=1)
     parser.add_argument('--outdir', type=str)
+
+    # environment
     parser.add_argument('--seed', type=int)
+    parser.add_argument('--confounder', choices=confounders.keys())
+    parser.add_argument('--to_dueling', choices=['one', 'two'])
+    parser.add_argument('--compensate', action='store_true')
     parser.add_argument('--min_gap', type=float)
     parser.add_argument('--noise_var', type=float, default=1.)
-    parser.add_argument('--rep', type=int, default=1)
+
+    # environment specfic settings
+    parser.add_argument('--se_d', type=int, default=2)
+    parser.add_argument('--points_per_dim', type=int, default=50)
+
+    # estimator
+    parser.add_argument('--delta', type=float, default=None)
+    parser.add_argument('--beta', type=float, default=None)
+    parser.add_argument('--lengthscale', type=float, default=1.0)
+    parser.add_argument('--reg', type=float, default=1.)
     parser.add_argument('--infogain', choices=[f.__name__ for f in INFOGAIN])
     parser.add_argument('--dids', action='store_true')
-    parser.add_argument('--delta', type=float, default=None)
+
+
     parser.add_argument('--laser-indirect', action='store_true', default=False)
     parser.add_argument('--aggr', choices=[f.__name__ for f in aggregate.AGGREGATORS])
     parser.add_argument('--lb_return', type=bool, default=False)
