@@ -238,7 +238,8 @@ def estimator_factory(game_, **params):
     scale_obs = params.get('lls_scale_obs', None)
     delta = params.get('delta')
     beta_logdet = params.get('beta_logdet', False)
-    lls = RegularizedLeastSquares(d=game_.get_d(), beta_logdet=beta_logdet, noise_var=noise_var, scale_obs=scale_obs)
+    beta_factor = params.get('beta_factor', 1.)
+    lls = RegularizedLeastSquares(d=game_.d, beta_logdet=beta_logdet, noise_var=noise_var, scale_obs=scale_obs, beta_factor=beta_factor)
     estimator = RegretEstimator(game=game_, lls=lls, delta=delta, truncate=False)
     return lls, estimator
 
@@ -458,6 +459,7 @@ def main():
     # estimator
     parser.add_argument('--delta', type=float, default=None)
     parser.add_argument('--beta', type=float, default=None)
+    parser.add_argument('--beta_factor', type=float, default=1.)
     parser.add_argument('--lengthscale', type=float, default=1.0)
     parser.add_argument('--reg', type=float, default=1.)
     parser.add_argument('--infogain', choices=[f.__name__ for f in INFOGAIN])

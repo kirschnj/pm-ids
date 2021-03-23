@@ -54,7 +54,7 @@ class ConfoundedToDuelingGame(Game):
         returns list of observation maps. shape (len(indices),m,d)
         """
         i0, i1 = split_indices(indices)
-        return (self.original_game.get_observation_maps(i0) - self.original_game.get_observation_maps(i1))
+        return self.original_game.get_observation_maps(i0) - self.original_game.get_observation_maps(i1)
 
 
 class ConfoundedToDuelingInstance(GameInstance):
@@ -88,7 +88,7 @@ class ConfoundedToDuelingInstance(GameInstance):
         shape = (len(indices),m)
         """
         i0, i1 = split_indices(indices)
-        B = np.random.binomial(1,0.5)
+        B = np.random.binomial(1, 0.5)
         if B:
             i0, i1 = i1, i0
 
@@ -99,7 +99,7 @@ class ConfoundedToDuelingInstance(GameInstance):
             return (-1)**B * (y0 - y1)
         else:
             # one point reduction method
-            return (-1)**B * self._get_noisy_observation(i0)
+            return 2 * (-1)**B * self._get_noisy_observation(i0)
 
     def _get_noisy_observation(self, i):
         # return self._original_instance.get_noisy_observation(i)

@@ -6,12 +6,13 @@ from pm.utils import difference_matrix
 
 class RegularizedLeastSquares:
 
-    def __init__(self, d, beta_logdet=True, noise_var=1., scale_obs=False):
+    def __init__(self, d, beta_logdet=True, noise_var=1., scale_obs=False, beta_factor=1.):
         self._d = d
         self._V = np.eye(self._d)
         self._XY = np.zeros(self._d)
         self._s = 1
         self.beta_logdet = beta_logdet
+        self.beta_factor = beta_factor
         self.noise_var = noise_var
         self.noise_std = np.sqrt(self.noise_var)
         self.scale_obs = scale_obs  # if true, feature vectors and observation are scaled by 1/noise_std (used to compute the posterior for TS)
@@ -79,7 +80,7 @@ class RegularizedLeastSquares:
             beta = (self.noise_std*np.sqrt(logdet + 2*np.log(1/delta)) + 1)**2
         else:
             beta = self.noise_var*2*np.log(1/delta) + self._d * max(np.log(np.log(_s)), 1)
-        return beta
+        return self.beta_factor * beta
 
     def get_cholesky_factor(self):
         return self._cholesky
@@ -95,7 +96,7 @@ class RegretEstimator:
     def __init__(self, game, lls, truncate=True, delta=None, ucb_estimates=True):
         self._truncate = truncate
         self._game = game
-        self._d = self._game.get_d()
+        self._d = self._game.d
         self._lls = lls
         self._delta = delta
         self._ucb_estimates = ucb_estimates  # this flag determines the way the gap upper bound is computed
