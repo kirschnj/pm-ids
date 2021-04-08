@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.linalg import cho_solve, cho_factor
 
-from pm.estimator import RegularizedLeastSquares
+from pm.strategies.lls import RegularizedLeastSquares
 from pm.strategy import Strategy
 from pm.utils import difference_matrix
 
@@ -30,7 +30,7 @@ class Bose(Strategy):
         x = self._game.get_actions(indices)
         self._robust_lls.add_data(self._m, x, y)
 
-    def get_next_action(self):
+    def get_action(self):
         # compute plausible actions
         d = self._game.d
         indices = self._game.get_indices()

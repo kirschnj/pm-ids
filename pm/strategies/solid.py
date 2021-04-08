@@ -3,13 +3,14 @@ import numpy as np
 from scipy.linalg import cho_solve, cho_factor
 
 from pm.utils import difference_matrix, psd_norm_squared
-import cvxpy as cp
+# import cvxpy as cp
 import logging
 
 class Solid(Strategy):
-    def __init__(self, game, estimator, lambda_1=0., z_0=100, alpha_l=0.1, alpha_w = 0.5, lambda_max=10, reset=True, noise_var=1.0, opt=False):
+    def __init__(self, game, lls, lambda_1=0., z_0=100, alpha_l=0.1, alpha_w = 0.5, lambda_max=10, reset=True, noise_var=1.0, opt=False):
         #check default values of parameters
-        super().__init__(game, estimator)
+        super().__init__(game)
+        self.lls = lls
         self.lambda_t = lambda_1
         self.lambda_1 = lambda_1 # for resets at phase ends
         self.lambda_max = lambda_max
@@ -33,33 +34,33 @@ class Solid(Strategy):
         self._t = 1
         self.reset = reset
 
-    def compute_nu(self, indices):
-        """
-        Compute the alternative parameters and Vnorm for each cell
-        Never called, just for debugging
-        """
-        d = self._game.d
-        X = self._game.get_actions(indices)
-        theta = self._estimator.lls.theta
-        V = self._estimator.lls.V
-        nu = np.zeros((len(indices), d))
-        C = difference_matrix(X)
-        # for each action, solve the quadratic program to find the alternative
-        for i in indices:
-            x = cp.Variable(d)
-            q = -2 * (V @ theta)
-            G = -C[i, :, :]
-
-            prob = cp.Problem(cp.Minimize(cp.quad_form(x, V) + q.T @ x), [G @ x <= 0])
-            prob.solve()
-
-            nu[i:] = x.value
-
-        # check corner cases in the bandit case : can the projected nu have a very large norm ? => regularization ?
-        # normalize as per our unit ball hypothesis => creates bugs when the projection on the cone is too close to origin. Also does it make sense ?
-        # nu /= np.linalg.norm(nu, axis=1)[:, None]
-        V_norm = psd_norm_squared(nu - theta, V)
-        return nu, V_norm
+    # def compute_nu(self, indices):
+    #     """
+    #     Compute the alternative parameters and Vnorm for each cell
+    #     Never called, just for debugging
+    #     """
+    #     d = self._game.d
+    #     X = self._game.get_actions(indices)
+    #     theta = self.lls.theta
+    #     V = self.lls.V
+    #     nu = np.zeros((len(indices), d))
+    #     C = difference_matrix(X)
+    #     # for each action, solve the quadratic program to find the alternative
+    #     for i in indices:
+    #         x = cp.Variable(d)
+    #         q = -2 * (V @ theta)
+    #         G = -C[i, :, :]
+    #
+    #         prob = cp.Problem(cp.Minimize(cp.quad_form(x, V) + q.T @ x), [G @ x <= 0])
+    #         prob.solve()
+    #
+    #         nu[i:] = x.value
+    #
+    #     # check corner cases in the bandit case : can the projected nu have a very large norm ? => regularization ?
+    #     # normalize as per our unit ball hypothesis => creates bugs when the projection on the cone is too close to origin. Also does it make sense ?
+    #     # nu /= np.linalg.norm(nu, axis=1)[:, None]
+    #     V_norm = psd_norm_squared(nu - theta, V)
+    #     return nu, V_norm
 
 
 
@@ -82,7 +83,7 @@ class Solid(Strategy):
 
         # sq_gaps = (self._means - self._means[self._winner])**2
 
-        delta_g_t = diff_eps + np.sqrt(self._estimator.lls.beta(1/self.explo_rounds) * self._estimator.var(indices))/self.sigma_sq
+        delta_g_t = diff_eps + np.sqrt(self.lls.beta(1/self.explo_rounds) * self.lls.var(indices))/self.sigma_sq
 
         return delta_f_t + self.lambda_t * delta_g_t
 
@@ -122,7 +123,7 @@ class Solid(Strategy):
             Vw = self.get_Vw(indices, eps=0.001)
         min_Vw_norm = self.get_info_ratios(Vw)
 
-        g_t = min_Vw_norm + np.dot(self.w_t, np.sqrt(self._estimator.lls.beta(1/self.explo_rounds) * self._estimator.var(indices))) - 1/self.z_k
+        g_t = min_Vw_norm + np.dot(self.w_t, np.sqrt(self.lls.beta(1/self.explo_rounds) * self.lls.var(indices))) - 1/self.z_k
         # print(g_t)
         self.lambda_t = np.max([0,np.min([self.lambda_t - self.alpha_l*g_t, self.lambda_max])])
 
@@ -140,7 +141,7 @@ class Solid(Strategy):
         second_best = np.argmin(gaps)
         x_best = self._game.get_actions(self._winner)
         x_2best = self._game.get_actions(second_best)
-        # alt_ms = gaps[second_best]**2/self._estimator.lls.var(x_best - x_2best)
+        # alt_ms = gaps[second_best]**2/self.lls.var(x_best - x_2best)
 
         sq_gap = gaps[second_best]**2
         # same as in estimator.lls.var(x) but with the general V_matrix
@@ -157,23 +158,23 @@ class Solid(Strategy):
 
         return sq_gap / sq_norm
 
-    def get_next_action(self):
+    def get_action(self):
         indices = self._game.get_indices()
 
 
-        self._means = self._estimator.lls.mean(self._game.get_actions(indices))
+        self._means = self.lls.mean(self._game.get_actions(indices))
         self._winner = np.argmax(self._means)
 
         #same as in ids, but article takes delta=1/n and uses n instead of logdet(V_t)
         _t = max(2, self._t)
-        beta_t = self._estimator.lls.beta(1/_t ) #* np.log(_t)
+        beta_t = self.lls.beta(1/_t ) #* np.log(_t)
 
-        # theta_min, min_V_norm = self.compute_alt(indices, self._estimator.lls.V)
+        # theta_min, min_V_norm = self.compute_alt(indices, self.lls.V)
         #
         # self._min_V_norm = min_V_norm
 
         # compute the minimum "information ratio" as in Eq 80 of Ap K
-        self._min_ratio = self.get_info_ratios(self._estimator.lls.V)
+        self._min_ratio = self.get_info_ratios(self.lls.V)
         # print(inf_ratios)
 
         #temporary:

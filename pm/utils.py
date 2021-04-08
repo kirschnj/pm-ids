@@ -2,7 +2,7 @@ from datetime import datetime
 import sys
 import numpy as np
 import contextlib
-import cvxpy as cp
+# import cvxpy as cp
 
 def timestamp():
     """
@@ -57,6 +57,9 @@ def psd_norm_squared(x, V):
   Also works for x of shape (n,d)
   """
   return np.sum(x.T * np.dot(V,x.T), axis=0)
+
+def to_name_dict(*args):
+    return dict([(f.__name__, f) for f in args])
 
 
 # def optimization(A, Delta, ft):
@@ -134,9 +137,26 @@ def fixed_seed(seed):
     """
     context manager that allows to fixes the numpy random seed
     """
-    state = np.random.get_state()
-    np.random.seed(seed)
+    if seed is not None:
+        state = np.random.get_state()
+        np.random.seed(seed)
     try:
         yield
     finally:
-        np.random.set_state(state)
+        if seed is not None:
+            np.random.set_state(state)
+
+def flatten_data_dict(data):
+    """ helper function to flatten elements of a dictionary such that it can be stored as csv """
+    keys = [*data.keys()]
+    for key in keys:
+        items = data[key]
+
+        if isinstance(items[0], np.ndarray) and items[0].ndim == 1:
+            items = np.array(items)
+            for i, col in enumerate(items.T):
+                data[f'{key}_{i}'] = col
+            del data[key]
+
+def get_binary_array(d):
+    return (((np.arange(2**d)[:,None] & (1 << np.arange(d)))) > 0).astype(int)

@@ -12,7 +12,7 @@ class SemiparametricTS(Strategy):
         self.Xy = np.zeros(self.game.d)
 
 
-    def get_next_action(self):
+    def get_action(self):
         # compute plausible actions
         d = self.game.d
         indices = self.game.get_indices()

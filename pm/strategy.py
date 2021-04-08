@@ -5,14 +5,13 @@ class Strategy:
     Base class for a strategy
     """
 
-    def __init__(self, game, estimator=None):
-        self._game = game
-        self._estimator = estimator
+    def __init__(self, game):
+        self.game = game
 
-    def add_observations(self, indices, y):
-        self._estimator.add_data(indices, y)
+    def add_observations(self, actions, obs):
+        raise NotImplemented
 
-    def get_next_action(self):
+    def get_action(self):
         raise NotImplemented
 
     def __str__(self):
