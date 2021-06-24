@@ -15,6 +15,8 @@ setup(name='pm',
       }
       , install_requires=[
             'numpy',
-            'scipy'
+            'scipy',
+            'pandas',
+            'osqp'
       ]
       )
