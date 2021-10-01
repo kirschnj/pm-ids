@@ -4,13 +4,20 @@ Install the package with `pip install -e .`
 
 Example usage:
 
-`pm2 laser ids --n=10000 --outdir=pm-runs/ --infogain=full`
+`pm2 simple_bandit --seed=3 ids --n=1000 --outdir=runs/ --ids_info=WorstCaseInfoGain --ids_gap=ValueGap`
+`pm2 simple_bandit --seed=3 ucb --n=1000 --outdir=runs/`
+
 
 In this case:
-* `laser` is the environment. There is also `simple_bandit`
-* `ids` is the algorithm. There is also ucb
-* `infogain` chooses the information gain for ids
-* `--n=10000` is the horizon
+* `laser` is another environment. There is also `contextual_simple_bandit` and the end of optimism example `eoo`
+* `ids` is the algorithm which can be configured using different arguments (`--ids_info`, `--ids_gap`). There is also `ucb`, `ts`
+* `--n=1000` is the horizon
+
+This puts performance data in `runs/` . The structure is `runs/env/algo-X-hash/run-hash.csv`. You can collect multiple runs for plotting later. For plotting, the runs need to be aggregated first. To do so, run:
+
+`pm2-aggr runs/env-X/ regret`
+
+This will compute aggregated statistics (mean, std-error) for the runs. The command goes recursively through directories, so you can also pass `pm2-aggr runs/ regret` to aggregate all environments. To do the actual plotting, make a copy of the notebook `notebooks/QuickPlotting.ipynb` and point the path to the environment you want to plot.
 
 See `pm2 --help` and pm/main.py for more options and details
 
