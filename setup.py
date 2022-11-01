@@ -17,6 +17,8 @@ setup(name='pm',
             'numpy',
             'scipy',
             'pandas',
-            'osqp'
+            'osqp',
+            'matplotlib',
+            'GPy',
       ]
-      )
+)
