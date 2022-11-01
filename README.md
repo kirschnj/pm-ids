@@ -5,6 +5,7 @@ Install the package with `pip install -e .`
 Example usage:
 
 `pm2 simple_bandit --seed=3 ids --n=1000 --outdir=runs/ --ids_info=WorstCaseInfoGain --ids_gap=ValueGap`
+
 `pm2 simple_bandit --seed=3 ucb --n=1000 --outdir=runs/`
 
 
