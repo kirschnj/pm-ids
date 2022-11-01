@@ -13,6 +13,7 @@ from hashlib import md5
 from pm import aggregate
 from pm.benchmarks import Camelback, SquaredExponential
 from pm.games.dueling import DuelingBandit, LocalizedDuelingBandit
+from pm.strategies.e2d import E2D
 from pm.strategies.gaps import GapEstimator
 from pm.strategies.gcb import GCB
 from pm.strategies.lls import RegularizedLeastSquares
@@ -443,6 +444,14 @@ def ucb(game_, **params):
     strategy = UCB(game_, lls, force_homoscedastic=params.get('ucb_force_homoscedastic'))
     return strategy
 
+def e2d(game_, **params):
+    """
+    strategy factory for UCB
+    """
+    lls = estimator_factory(game_, **params)
+    strategy = E2D(game_, lls)
+    return strategy
+
 def gpucb(game_, **params):
     delta = params.get('delta')
     reg = params.get('reg')
@@ -544,7 +553,7 @@ def confounded_reduction(game_, instance, **params):
 
 
 # list of available strategies
-STRATEGIES = to_name_dict(ucb, ts, ids, solid, dueling_ids, bose, semiparametric_ts, gpucb, dueling_kids, maxinp, gcb, pege)
+STRATEGIES = to_name_dict(ucb, ts, ids, solid, dueling_ids, bose, semiparametric_ts, gpucb, dueling_kids, maxinp, gcb, pege, e2d)
 
 # list of available info gains for IDS
 INFOGAIN = to_name_dict(infogain.WorstCaseInfoGain, infogain.AsymptoticInfoGain, infogain.SampleMIInfoGain, infogain.VarInfoGain, infogain.UCBInfoGain, infogain.DirectedInfoGain)
