@@ -8,7 +8,7 @@ from pm.utils import psd_norm_squared
 
 
 class E2D(Strategy):
-    def __init__(self, game, lls : RegularizedLeastSquares):
+    def __init__(self, game, lls : RegularizedLeastSquares, gamma_power=0.5):
         super().__init__(game)
         self.lls = lls
         self.K = game.k
@@ -16,6 +16,7 @@ class E2D(Strategy):
         self.mu = np.ones(self.K) / self.K
         self.t = 1
         self.I = np.eye(self.K)
+        self.gamma_power = gamma_power
 
     def get_action(self):
         self.update_mu(fw_iter=100)
@@ -58,7 +59,7 @@ class E2D(Strategy):
         return gap - gamma * KL
 
     def update_mu(self, fw_iter=1000):
-        gamma = np.sqrt(self.t)
+        gamma = self.t**self.gamma_power
         for i in range(1, fw_iter):
             theta_hat = self.lls.theta
             V_mu, phi_mu = self.get_weighted(self.mu)

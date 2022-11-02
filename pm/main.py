@@ -449,7 +449,7 @@ def e2d(game_, **params):
     strategy factory for UCB
     """
     lls = estimator_factory(game_, **params)
-    strategy = E2D(game_, lls)
+    strategy = E2D(game_, lls, gamma_power=params.get('e2d_gamma_power'))
     return strategy
 
 def gpucb(game_, **params):
@@ -753,6 +753,8 @@ def main():
     parser.add_argument('--beta_factor', type=float, default=1.)
     parser.add_argument('--lengthscale', type=float, default=1.0)
     parser.add_argument('--regularizer', type=float, default=1.)
+
+    parser.add_argument('--e2d_gamma_power', type=float, default=0.5)
 
     # ids
     parser.add_argument('--ids_sampling', choices=['full', 'fast', 'deterministic', 'contextual'], default='fast')
