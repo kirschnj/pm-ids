@@ -73,13 +73,12 @@ class E2D(Strategy):
             b = np.argmax(dec)
 
             # compute gradient of dec w.r.t. sampling distribution
-            values2 = self.G(theta_alt[b], theta_hat, b, gamma)
-            a_ = np.argmin(values2)
+            grad_dec = self.G(theta_alt[b], theta_hat, b, gamma)
+            a = np.argmin(grad_dec)
 
             # frank wolfe step
             lrate = 1 / (self.t + i + 2)
-            self.mu = (1 - lrate) * self.mu + lrate * self.I[a_]
-            # print(theta_0)
+            self.mu = (1 - lrate) * self.mu + lrate * self.I[a]
 
     def add_observations(self, actions, obs):
         m = self.game.M[actions]
