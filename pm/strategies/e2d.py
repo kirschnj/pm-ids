@@ -5,7 +5,7 @@ from pm.strategy import Strategy
 import numpy as np
 
 from pm.utils import psd_norm_squared
-
+import matplotlib.pyplot as plt
 
 class E2D(Strategy):
     def __init__(self, game, lls : RegularizedLeastSquares, gamma_power=0.5):
@@ -61,52 +61,55 @@ class E2D(Strategy):
     def update_mu(self, fw_iter=1000):
         gamma = self.t**self.gamma_power
 
-        max_lambda = gamma
-        lambdas = np.linspace(0, max_lambda, 10)
+        max_lambda = max(gamma, 10)
+        lambdas = np.linspace(0.1, max_lambda, 100)
 
         eps_sq = self.d/self.t
 
-        best_lambda = None
-        best_obj = np.inf
-        best_mu = np.ones(self.K) / self.K
+        objs = []
+        mus = []
 
-        for l in lambdas[1:]:
+        for l in lambdas:
 
             # middle of the simplex
-            self.mu = np.ones(self.K) / self.K
+            mu = np.ones(self.K) / self.K
             final_obj = np.inf
             final_mu = np.ones(self.K) / self.K
 
             for i in range(1, fw_iter):
                 theta_hat = self.lls.theta
-                V_mu, phi_mu = self.get_weighted(self.mu)
+                V_mu, phi_mu = self.get_weighted(mu)
 
                 # compute action that maximes the dec
                 # values = self.g(V_mu, phi_mu, theta_hat, gamma)
                 # b = np.argmax(values)
 
                 # compute alternative parameters for each possible maximizing action
-                dec, theta_alt = self.get_theta_alt(theta_hat, V_mu, phi_mu, gamma)
+                dec, theta_alt = self.get_theta_alt(theta_hat, V_mu, phi_mu, l)
                 b = np.argmax(dec)
 
                 # compute gradient of dec w.r.t. sampling distribution
-                grad_dec = self.G(theta_alt[b], theta_hat, b, gamma)
+                grad_dec = self.G(theta_alt[b], theta_hat, b, l)
                 a = np.argmin(grad_dec)
 
                 final_obj = dec[b]
-                final_mu = np.copy(self.mu)
+                final_mu = mu
 
                 # frank wolfe step
                 lrate = 1 / (self.t + i + 2)
-                self.mu = (1 - lrate) * self.mu + lrate * self.I[a]
+                mu = (1 - lrate) * mu + lrate * self.I[a]
 
-            if final_obj + l * eps_sq < best_obj:
-                best_obj = final_obj + l * eps_sq
-                best_mu = np.copy(final_mu)
-                best_lambda = l
+            mus.append(final_mu)
+            objs.append(final_obj + l * eps_sq)
 
-        self.mu = best_mu
-        print(f"Iteration: {self.t}, lambda: {best_lambda}")
+
+        if self.t % 10 == 1:
+            print(f"plotting at time {self.t}")
+            plt.plot(lambdas, objs)
+            plt.show()
+
+        self.mu = mus[np.argmin(objs)]
+        print(f"Iteration: {self.t}, lambda: {lambdas[np.argmin(objs)]}, best_obj: {np.min(objs)}")
 
     def add_observations(self, actions, obs):
         m = self.game.M[actions]
