@@ -177,6 +177,52 @@ def simple_bandit(**params):
 
     return game, instance
 
+def semi_bandit(**params):
+    """
+    game factory for simple bandit game
+    """
+
+    noise, confounder = noise_factory(**params)
+    seed = params.get('seed')
+    d = params.get('d')
+    k = params.get('k')
+    random_noise = params.get('random_noise')
+    normalize_actions = params.get('normalize_actions')
+
+    theta = np.zeros(d)
+    theta[0] = 1.
+
+    # Create the graph of the game
+    graph = np.zeros((k, k), dtype=np.int32)
+    for i in range(k):
+        graph[i, i] = 1
+        graph[0, i] = 1
+
+    M = np.zeros((k, k, d), dtype=np.float32)
+
+    with fixed_seed(seed):
+        X = np.random.normal(size=d*k).reshape(k, d)
+        X[0, :] = 0
+        if normalize_actions:
+            X = (X.T / np.linalg.norm(X, axis=1)).T
+        for i in range(k):
+            for j in range(k):
+                if graph[i, j] == 1:
+                    M[i, j] = X[j]
+
+    _id = f"semi_bandit_d{d}_k{k}_v{params.get('noise_var')}"
+    if seed is not None:
+        _id += f"_s{seed}"
+    if confounder is not None:
+        _id += f"_c{type(confounder).__name__}"
+    if random_noise:
+        _id += f'_rn{random_noise}'
+
+    game = Game(X, M=M, name=_id)
+    instance = GameInstance(game, theta=theta, noise=noise, confounder=confounder)
+
+    return game, instance
+
 def noise_example(**params):
     noise, _ = noise_factory(**params)
     seed = params.get('seed')
@@ -560,7 +606,7 @@ INFOGAIN = to_name_dict(infogain.WorstCaseInfoGain, infogain.AsymptoticInfoGain,
 GAP_ESTIMATORS = to_name_dict(gaps.ValueGap, gaps.FastValueGap, gaps.DiffGap, gaps.FastDiffGap, gaps.BayesianGap)
 
 # list of available games
-GAMES = to_name_dict(simple_bandit, large_gaps, eoo, camelback, se, noise_example, random_dueling, localized_dueling, contextual_simple_bandit, icecream, laser)
+GAMES = to_name_dict(simple_bandit, semi_bandit, large_gaps, eoo, camelback, se, noise_example, random_dueling, localized_dueling, contextual_simple_bandit, icecream, laser)
 
 CONFOUNDERS = to_name_dict(PeriodicDrift, NegativeDrift, NegativeRepeat, NegativeRepeatTwo, MinusBest, AlternatingMinusBest, NegativeBernoulli, Bernoulli, PhasedOffset, PositiveRepeat, AutoCalibration)
 
@@ -833,6 +879,7 @@ def main():
             logging.info(f"Running iteration {i}.")
         path = run(game_factory, strategy_factory, **args)
 
+    # lower bound
     if lb_return:
         n = args['n']
         game, instance = game_factory(**args)
