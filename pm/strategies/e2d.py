@@ -72,9 +72,7 @@ class E2D(Strategy):
         for l in lambdas:
 
             # middle of the simplex
-            mu = np.ones(self.K) / self.K
-            final_obj = np.inf
-            final_mu = np.ones(self.K) / self.K
+            mu = self.mu.copy()
 
             for i in range(1, fw_iter):
                 theta_hat = self.lls.theta
@@ -99,14 +97,13 @@ class E2D(Strategy):
                 lrate = 1 / (self.t + i + 2)
                 mu = (1 - lrate) * mu + lrate * self.I[a]
 
-            mus.append(final_mu)
+            mus.append(final_mu.copy())
             objs.append(final_obj + l * eps_sq)
 
-
-        if self.t % 10 == 1:
-            print(f"plotting at time {self.t}")
-            plt.plot(lambdas, objs)
-            plt.show()
+        # if self.t % 10 == 1:
+        #     print(f"plotting at time {self.t}")
+        #     plt.plot(lambdas, objs)
+        #     plt.show()
 
         self.mu = mus[np.argmin(objs)]
         print(f"Iteration: {self.t}, lambda: {lambdas[np.argmin(objs)]}, best_obj: {np.min(objs)}")
