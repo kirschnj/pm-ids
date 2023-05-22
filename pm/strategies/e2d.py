@@ -8,7 +8,14 @@ from pm.utils import psd_norm_squared
 import matplotlib.pyplot as plt
 
 class E2D(Strategy):
-    def __init__(self, game, lls : RegularizedLeastSquares, gamma_power=0.5):
+    def __init__(self,
+                 game,
+                 lls : RegularizedLeastSquares,
+                 delta_f=False,
+                 anytime_lambda=False,
+                 fixed_lambda=0,
+                 exploration_multiplier=1,
+                 ):
         super().__init__(game)
         self.lls = lls
         self.K = game.k
@@ -16,7 +23,12 @@ class E2D(Strategy):
         self.mu = np.ones(self.K) / self.K
         self.t = 1
         self.I = np.eye(self.K)
-        self.gamma_power = gamma_power
+
+        self.delta_f = delta_f
+
+        self.anytime_lambda = anytime_lambda
+        self.fixed_lambda = fixed_lambda
+        self.exploration_multiplier = exploration_multiplier
 
     def get_action(self):
         self.update_mu(fw_iter=100)
@@ -42,29 +54,24 @@ class E2D(Strategy):
         dec = gaps - gamma * KL
         return dec, theta_alt
 
-    # def g(self, V_mu, phi_mu, theta, gamma):
-    #     """
-    #     computes the value of the dec for any possible maximizing action.
-    #     return shape (k, d)
-    #     """
-    #     diff_X = self.game.X - phi_mu
-    #     gaps = theta @ diff_X.T
-    #     bonus = 1 / (4 * gamma) * (psd_norm_squared(diff_X, np.linalg.inv(V_mu)))
-    #     return gaps + bonus
-
     def G(self, theta_alt, theta_hat, b, gamma):
         # print(theta_0)
         gap = - self.game.X @ theta_alt + np.inner(theta_alt, self.game.X[b])
         KL = np.sum( (self.game.M @ (theta_alt - theta_hat)) ** 2, axis=1)
         return gap - gamma * KL
 
+    def get_lambda(self):
+        if self.fixed_lambda != 0:
+            return np.linspace(0, self.fixed_lambda, 2)[1:]
+        if not self.anytime_lambda:
+            return np.linspace(0, self.exploration_multiplier * self.t **0.5, 2)[1:]
+        if self.anytime_lambda:
+            return np.linspace(0, self.exploration_multiplier * self.t **0.5, 20)[1:]
+
     def update_mu(self, fw_iter=1000):
-        gamma = self.t**self.gamma_power
+        lambdas = self.get_lambda()
 
-        max_lambda = max(gamma, 10)
-        lambdas = np.linspace(0.1, max_lambda, 100)
-
-        eps_sq = self.d/self.t
+        eps_sq = self.exploration_multiplier * self.d/self.t
 
         objs = []
         mus = []
@@ -77,10 +84,6 @@ class E2D(Strategy):
             for i in range(1, fw_iter):
                 theta_hat = self.lls.theta
                 V_mu, phi_mu = self.get_weighted(mu)
-
-                # compute action that maximes the dec
-                # values = self.g(V_mu, phi_mu, theta_hat, gamma)
-                # b = np.argmax(values)
 
                 # compute alternative parameters for each possible maximizing action
                 dec, theta_alt = self.get_theta_alt(theta_hat, V_mu, phi_mu, l)

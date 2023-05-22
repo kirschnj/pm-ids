@@ -202,7 +202,7 @@ def semi_bandit(**params):
 
     with fixed_seed(seed):
         X = np.random.normal(size=d*k).reshape(k, d)
-        X[0, :] = 0
+        # X[0, :] = 0
         if normalize_actions:
             X = (X.T / np.linalg.norm(X, axis=1)).T
         for i in range(k):
@@ -495,7 +495,13 @@ def e2d(game_, **params):
     strategy factory for UCB
     """
     lls = estimator_factory(game_, **params)
-    strategy = E2D(game_, lls, gamma_power=params.get('e2d_gamma_power'))
+    strategy = E2D(game_,
+                    lls,
+                    delta_f=params.get('e2d_delta_f'),
+                    anytime_lambda=params.get('e2d_anytime_lambda'),
+                    fixed_lambda=params.get('e2d_fixed_lambda'),
+                    exploration_multiplier=params.get('e2d_exploration_multiplier'),
+                )
     return strategy
 
 def gpucb(game_, **params):
@@ -800,7 +806,11 @@ def main():
     parser.add_argument('--lengthscale', type=float, default=1.0)
     parser.add_argument('--regularizer', type=float, default=1.)
 
-    parser.add_argument('--e2d_gamma_power', type=float, default=0.5)
+    # e2d
+    parser.add_argument('--e2d_delta_f', type=bool, default=False)
+    parser.add_argument('--e2d_anytime_lambda', type=bool, default=False)
+    parser.add_argument('--e2d_fixed_lambda', type=float, default=0)
+    parser.add_argument('--e2d_exploration_multiplier', type=float, default=1.)
 
     # ids
     parser.add_argument('--ids_sampling', choices=['full', 'fast', 'deterministic', 'contextual'], default='fast')
