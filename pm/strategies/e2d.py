@@ -6,6 +6,7 @@ import numpy as np
 
 from pm.utils import psd_norm_squared
 import matplotlib.pyplot as plt
+import logging
 
 class E2D(Strategy):
     def __init__(self,
@@ -72,7 +73,7 @@ class E2D(Strategy):
         if not self.anytime_lambda:
             return np.linspace(0, self.exploration_multiplier * self.t **0.5, 2)[1:]
         if self.anytime_lambda:
-            return np.linspace(0, self.exploration_multiplier * self.t **0.5, 20)[1:]
+            return np.linspace(0, self.exploration_multiplier * self.t **0.5, 100)[1:]
 
     def update_mu(self, fw_iter=1000):
         lambdas = self.get_lambda()
@@ -115,7 +116,7 @@ class E2D(Strategy):
         #     plt.show()
 
         self.mu = mus[np.argmin(objs)]
-        print(f"Iteration: {self.t}, lambda: {lambdas[np.argmin(objs)]}, best_obj: {np.min(objs)}")
+        logging.info(f"Iteration: {self.t}, lambda: {lambdas[np.argmin(objs)]}, best_obj: {np.min(objs)}")
 
     def add_observations(self, actions, obs):
         m = self.game.M[actions]
