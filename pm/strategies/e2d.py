@@ -42,23 +42,29 @@ class E2D(Strategy):
         V_mu = np.array([Ma.T @ Ma for Ma in self.game.M]).T @ mu
         return V_mu, phi_mu
 
-    def get_theta_alt(self, theta_hat, V_mu, phi_mu, gamma):
+    def get_theta_alt(self, theta_hat, V_mu, phi_mu, lumbda):
         """
         Compute alternative parameters for each possible maximizer.
         return shape (k, d)
         """
-        theta_alt = 1 / (2 * gamma) * np.linalg.solve(V_mu, (self.game.X - phi_mu).T).T + theta_hat
+        if self.delta_f is False:
+            theta_alt = 1 / (2 * lumbda) * np.linalg.solve(V_mu, (self.game.X - phi_mu).T).T + theta_hat
 
-        gaps = np.sum(theta_alt * (self.game.X - phi_mu), axis=1)
-        KL = psd_norm_squared(theta_alt - theta_hat, V_mu)
-        dec = gaps - gamma * KL
-        return dec, theta_alt
+            gaps = np.sum(theta_alt * (self.game.X - phi_mu), axis=1)
+            KL = psd_norm_squared(theta_alt - theta_hat, V_mu)
+            dec = gaps - lumbda * KL
+            return dec, theta_alt
+        else:
+            theta_alt = 1 / (2 * lumbda) * np.linalg.solve(V_mu, self.game.X.T).T + theta_hat
+            gaps = np.sum(theta_alt * self.game.X, axis=1) - np.inner(phi_mu, theta_hat)
+            KL = psd_norm_squared(theta_alt - theta_hat, V_mu)
+            dec = gaps - lumbda * KL
+            return dec, theta_alt
 
-    def G(self, theta_alt, theta_hat, b, gamma):
-        # print(theta_0)
+    def G(self, theta_alt, theta_hat, b, lumbda):
         gap = - self.game.X @ theta_alt + np.inner(theta_alt, self.game.X[b])
         KL = np.sum( (self.game.M @ (theta_alt - theta_hat)) ** 2, axis=1)
-        return gap - gamma * KL
+        return gap - lumbda * KL
 
     def get_lambda(self):
         if self.fixed_lambda != 0:
