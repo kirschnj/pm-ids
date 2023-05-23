@@ -79,7 +79,7 @@ class E2D(Strategy):
         if self.anytime_lambda:
             return np.linspace(0, self.exploration_multiplier * self.t **0.5, 100)[1:]
 
-    def update_mu(self, fw_iter=5000):
+    def update_mu(self, fw_iter=1000):
         lambdas = self.get_lambda()
 
         eps_sq = self.exploration_multiplier * self.d/self.t
@@ -108,7 +108,7 @@ class E2D(Strategy):
                 final_mu = mu
 
                 # frank wolfe step
-                lrate = 1 / (self.t * (i + 2))
+                lrate = 1 / (self.t + i + 2)
                 mu = (1 - lrate) * mu + lrate * self.I[a]
 
             mus.append(final_mu.copy())
