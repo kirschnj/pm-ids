@@ -39,7 +39,7 @@ class E2D(Strategy):
         """
         Compute average feature and covariance matrix under sampling distribution  `mu`
         """
-        phi_mu = np.zeros(self.game.d)
+        phi_mu = self.game.X.T @ mu
         V_mu = np.array([Ma.T @ Ma for Ma in self.game.M]).T @ mu
         return V_mu, phi_mu
 
@@ -63,7 +63,11 @@ class E2D(Strategy):
             return dec, theta_alt
 
     def G(self, theta_alt, theta_hat, b, lumbda):
-        gap = - self.game.X @ theta_alt + np.inner(theta_alt, self.game.X[b])
+        gap = 0
+        if self.delta_f is False:
+            gap = - self.game.X @ theta_alt + np.inner(theta_alt, self.game.X[b])
+        else:
+            gap = - self.game.X @ theta_hat + np.inner(theta_alt, self.game.X[b])
         KL = np.sum( (self.game.M @ (theta_alt - theta_hat)) ** 2, axis=1)
         return gap - lumbda * KL
 
@@ -75,7 +79,7 @@ class E2D(Strategy):
         if self.anytime_lambda:
             return np.linspace(0, self.exploration_multiplier * self.t **0.5, 100)[1:]
 
-    def update_mu(self, fw_iter=1000):
+    def update_mu(self, fw_iter=5000):
         lambdas = self.get_lambda()
 
         eps_sq = self.exploration_multiplier * self.d/self.t
@@ -104,7 +108,7 @@ class E2D(Strategy):
                 final_mu = mu
 
                 # frank wolfe step
-                lrate = 1 / (self.t + i + 2)
+                lrate = 1 / (self.t * (i + 2))
                 mu = (1 - lrate) * mu + lrate * self.I[a]
 
             mus.append(final_mu.copy())
