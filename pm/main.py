@@ -223,6 +223,48 @@ def semi_bandit(**params):
 
     return game, instance
 
+
+def hard_semi_bandit(**params):
+    """
+    game factory for simple bandit game
+    """
+
+    noise, confounder = noise_factory(**params)
+    seed = params.get('seed')
+    d = params.get('d')
+
+    theta = np.ones(d)/np.sqrt(d)
+    theta[1] = 1/np.sqrt(d) + d/31
+    # theta[0] = 0
+
+    k = d + 1
+    # Create the graph of the game
+    graph = np.zeros((k, k), dtype=np.int32)
+    for i in range(k):
+        graph[i, i] = 1
+        graph[0, i] = 1
+
+    M = np.zeros((k, k, d), dtype=np.float32)
+
+    with fixed_seed(seed):
+        X = np.eye(d+1)[:, 1:]
+        # X[0, :] = 0
+        for i in range(k):
+            for j in range(k):
+                if graph[i, j] == 1:
+                    M[i, j] = X[j]
+
+    _id = f"hard_semi_bandit_d{d}_k{k}_v{params.get('noise_var')}"
+    if seed is not None:
+        _id += f"_s{seed}"
+    if confounder is not None:
+        _id += f"_c{type(confounder).__name__}"
+
+    game = Game(X, M=M, name=_id)
+    instance = GameInstance(game, theta=theta, noise=noise, confounder=confounder)
+
+    return game, instance
+
 def noise_example(**params):
     noise, _ = noise_factory(**params)
     seed = params.get('seed')
@@ -612,7 +654,7 @@ INFOGAIN = to_name_dict(infogain.WorstCaseInfoGain, infogain.AsymptoticInfoGain,
 GAP_ESTIMATORS = to_name_dict(gaps.ValueGap, gaps.FastValueGap, gaps.DiffGap, gaps.FastDiffGap, gaps.BayesianGap)
 
 # list of available games
-GAMES = to_name_dict(simple_bandit, semi_bandit, large_gaps, eoo, camelback, se, noise_example, random_dueling, localized_dueling, contextual_simple_bandit, icecream, laser)
+GAMES = to_name_dict(simple_bandit, semi_bandit, hard_semi_bandit, large_gaps, eoo, camelback, se, noise_example, random_dueling, localized_dueling, contextual_simple_bandit, icecream, laser)
 
 CONFOUNDERS = to_name_dict(PeriodicDrift, NegativeDrift, NegativeRepeat, NegativeRepeatTwo, MinusBest, AlternatingMinusBest, NegativeBernoulli, Bernoulli, PhasedOffset, PositiveRepeat, AutoCalibration)
 
